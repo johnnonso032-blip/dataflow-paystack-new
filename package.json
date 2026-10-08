@@ -1,0 +1,8 @@
+{
+  "name": "dataflow-paystack",
+  "version": "1.0.0",
+  "description": "DataFlow NG demo app - Paystack TEST mode payments, deployable on Vercel",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": { "node": ">=18" }
+}

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DataFlow NG</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--text:#14171f;--muted:#667085;--brand:#0a7cff;--line:#e4e7ec;--ok:#12805c;--bad:#c0392b;--warn:#b7791f}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--card:#181c25;--text:#eef1f6;--muted:#98a2b3;--line:#2a303c}}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0}
+header b{font-size:18px}nav a{margin-left:14px;color:var(--brand);text-decoration:none;font-size:14px}
+main{max-width:640px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+h2{margin:0 0 10px;font-size:17px}label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+input,select{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font-size:16px;background:var(--bg);color:var(--text)}
+button{background:var(--brand);color:#fff;border:0;border-radius:10px;padding:12px 16px;font-size:16px;cursor:pointer;width:100%;margin-top:14px}
+button.sec{background:transparent;color:var(--brand);border:1px solid var(--brand);width:auto;padding:6px 10px;font-size:13px;margin:0}
+button:disabled{opacity:.5}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}.tab{flex:1;min-width:70px;padding:10px;border:1px solid var(--line);border-radius:10px;text-align:center;cursor:pointer;font-size:14px}
+.tab.on{border-color:var(--brand);color:var(--brand);font-weight:600}
+.plans{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.plan{border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer}.plan.on{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+.plan small{color:var(--muted)}.plan b{display:block;margin-top:4px}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600;color:#fff}
+.success{background:var(--ok)}.failed{background:var(--bad)}.pending{background:var(--warn)}.abandoned{background:#667085}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.row:last-child{border:0}.muted{color:var(--muted);font-size:13px}.hide{display:none}
+.note{background:rgba(10,124,255,.08);border-radius:10px;padding:10px;font-size:13px;margin-top:10px}
+</style>
+</head>
+<body>
+<header><b>📶 DataFlow NG</b>
+<nav><a href="#home">Buy</a><a href="#orders">My Orders</a><a href="#admin">Admin</a></nav></header>
+<main>
+
+<!-- BUY PAGE -->
+<section id="page-home">
+  <div class="card">
+    <h2>Buy data</h2>
+    <label>Network</label><div class="tabs" id="networks"></div>
+    <label>Plan</label><div class="plans" id="plans"></div>
+    <label for="phone">Phone number to receive data</label>
+    <input id="phone" type="tel" inputmode="numeric" placeholder="08012345678" maxlength="11">
+    <label for="email">Email (for payment receipt)</label>
+    <input id="email" type="email" placeholder="you@example.com">
+    <button id="payBtn">Pay with Paystack</button>
+    <div class="note">🧪 Test mode: no real money is charged. Use a Paystack test card.</div>
+    <p id="msg" class="muted"></p>
+  </div>
+</section>
+
+<!-- ORDERS PAGE -->
+<section id="page-orders" class="hide">
+  <div class="card"><h2>My Orders</h2><div id="myOrders"></div></div>
+</section>
+
+<!-- ADMIN PAGE -->
+<section id="page-admin" class="hide">
+  <div class="card" id="adminLogin">
+    <h2>Admin login</h2>
+    <label for="pass">Passcode</label><input id="pass" type="password">
+    <button id="adminBtn">Enter</button><p id="adminMsg" class="muted"></p>
+  </div>
+  <div class="card hide" id="adminPanel">
+    <h2>All orders</h2>
+    <div class="muted" id="stats"></div>
+    <div id="adminOrders"></div>
+    <button class="sec" id="clearBtn" style="margin-top:12px">Clear all orders</button>
+  </div>
+</section>
+
+</main>
+
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<script src="/lib/config.js"></script>
+<script src="/lib/prices.js"></script>
+<script>
+(function(){
+  var C = window.DATAFLOW_CONFIG, P = window.DATAFLOW_PRICES;
+  var KEY = 'dataflow_orders_v1';
+  var net = Object.keys(P.NETWORKS)[0], planId = null;
+  var $ = function(id){return document.getElementById(id)};
+  var naira = function(n){return '₦' + Number(n).toLocaleString()};
+  var esc = function(s){var d=document.createElement('div');d.textContent=String(s==null?'':s);return d.innerHTML};
+
+  function load(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return []}}
+  function save(list){try{localStorage.setItem(KEY,JSON.stringify(list))}catch(e){}}
+  function upsert(o){var l=load(),i=l.findIndex(function(x){return x.reference===o.reference});
+    if(i>=0)l[i]=Object.assign(l[i],o);else l.unshift(o);save(l)}
+
+  /* ---------- routing ---------- */
+  function route(){
+    var h=(location.hash||'#home').slice(1);
+    ['home','orders','admin'].forEach(function(p){$('page-'+p).classList.toggle('hide',p!==h)});
+    if(h==='orders')renderOrders('myOrders',false);
+    if(h==='admin')renderAdmin();
+  }
+  window.addEventListener('hashchange',route);
+
+  /* ---------- buy page ---------- */
+  function renderNetworks(){
+    $('networks').innerHTML=Object.keys(P.NETWORKS).map(function(n){
+      return '<div class="tab'+(n===net?' on':'')+'" data-n="'+esc(n)+'">'+esc(n)+'</div>'}).join('');
+    [].forEach.call($('networks').children,function(el){el.onclick=function(){net=el.dataset.n;planId=null;renderNetworks();renderPlans()}});
+  }
+  function renderPlans(){
+    $('plans').innerHTML=P.NETWORKS[net].map(function(p){
+      return '<div class="plan'+(p.id===planId?' on':'')+'" data-id="'+esc(p.id)+'"><small>'+esc(p.label)+'</small><b>'+naira(p.price)+'</b></div>'}).join('');
+    [].forEach.call($('plans').children,function(el){el.onclick=function(){planId=el.dataset.id;renderPlans()}});
+  }
+
+  function say(t){$('msg').textContent=t}
+
+  $('payBtn').onclick=function(){
+    var phone=$('phone').value.trim(), email=$('email').value.trim();
+    var plan=planId&&P.findPlan(planId);
+    if(!plan)return say('Please choose a plan.');
+    if(!/^0[789][01]\d{8}$/.test(phone))return say('Enter a valid 11-digit Nigerian phone number.');
+    if(!/^\S+@\S+\.\S+$/.test(email))return say('Enter a valid email address.');
+    if(typeof PaystackPop==='undefined')return say('Paystack failed to load. Check your connection.');
+    if(!/^pk_test_/.test(C.PAYSTACK_PUBLIC_KEY)||/REPLACE/.test(C.PAYSTACK_PUBLIC_KEY))
+      return say('Set your Paystack TEST public key in lib/config.js first.');
+
+    var ref='DFNG-'+Date.now()+'-'+Math.floor(Math.random()*1e5);
+    var order={reference:ref,network:plan.network,planId:plan.id,plan:plan.label,amount:plan.price,
+      phone:phone,email:email,status:'pending',createdAt:new Date().toISOString()};
+    upsert(order);say('Opening payment…');
+
+    var handler=PaystackPop.setup({
+      key:C.PAYSTACK_PUBLIC_KEY,email:email,amount:plan.price*100,currency:C.CURRENCY,ref:ref,
+      metadata:{custom_fields:[
+        {display_name:'Phone',variable_name:'phone',value:phone},
+        {display_name:'Plan',variable_name:'plan',value:plan.network+' '+plan.label}]},
+      callback:function(resp){
+        say('Verifying payment…');
+        verify(resp.reference||ref,plan.id).then(function(){location.hash='#orders'});
+      },
+      onClose:function(){
+        // Closed without paying: leave as pending, mark abandoned after a quick server check.
+        verify(ref,plan.id).then(function(){say('Payment window closed.');location.hash='#orders'});
+      }
+    });
+    handler.openIframe();
+  };
+
+  /* ---------- verification ---------- */
+  function verify(ref,pid){
+    return fetch('/api/verify?reference='+encodeURIComponent(ref)+'&planId='+encodeURIComponent(pid))
+      .then(function(r){return r.json()})
+      .then(function(d){
+        var st=d.status;
+        if(st==='error'){return}                 // server/network problem: keep current status
+        if(st==='failed'&&/not found|transaction reference/i.test(d.message||''))st='abandoned';
+        upsert({reference:ref,status:st,verifiedAt:new Date().toISOString(),note:d.message||''});
+      }).catch(function(){});
+  }
+
+  /* ---------- orders ---------- */
+  function renderOrders(target,admin){
+    var l=load();
+    if(!l.length){$(target).innerHTML='<p class="muted">No orders yet.</p>';return}
+    $(target).innerHTML=l.map(function(o){
+      return '<div class="row"><div><b>'+esc(o.network)+' '+esc(o.plan)+'</b> — '+naira(o.amount)+
+        '<div class="muted">'+esc(o.phone)+(admin?' • '+esc(o.email):'')+'<br>'+esc(o.reference)+'<br>'+
+        new Date(o.createdAt).toLocaleString()+'</div></div><div style="text-align:right">'+
+        '<span class="badge '+esc(o.status)+'">'+esc(o.status)+'</span>'+
+        (o.status!=='success'?'<br><button class="sec" style="margin-top:6px" data-ref="'+esc(o.reference)+'" data-p="'+esc(o.planId)+'">Re-check</button>':'')+
+        '</div></div>'}).join('');
+    [].forEach.call($(target).querySelectorAll('button[data-ref]'),function(b){
+      b.onclick=function(){b.disabled=true;verify(b.dataset.ref,b.dataset.p).then(function(){route()})}});
+  }
+
+  /* ---------- admin ---------- */
+  var adminOk=false;
+  $('adminBtn').onclick=function(){
+    if($('pass').value===C.ADMIN_PASSCODE){adminOk=true;renderAdmin()}else $('adminMsg').textContent='Wrong passcode.';
+  };
+  function renderAdmin(){
+    $('adminLogin').classList.toggle('hide',adminOk);
+    $('adminPanel').classList.toggle('hide',!adminOk);
+    if(!adminOk)return;
+    var l=load(),paid=l.filter(function(o){return o.status==='success'});
+    $('stats').textContent=l.length+' orders • '+paid.length+' paid • '+naira(paid.reduce(function(s,o){return s+o.amount},0))+' revenue (test)';
+    renderOrders('adminOrders',true);
+  }
+  $('clearBtn').onclick=function(){if(confirm('Delete all orders on this device?')){save([]);renderAdmin()}};
+
+  renderNetworks();renderPlans();route();
+})();
+</script>
+</body>
+</html>
