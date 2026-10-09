@@ -12,7 +12,12 @@ async function vtPost(path, body) {
     },
     body: JSON.stringify(body)
   });
-  return r.json();
+  const text = await r.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return { code: "HTTP " + r.status, response_description: text.slice(0, 120) };
+  }
 }
 
 function makeRequestId(paidAt, reference) {
@@ -27,12 +32,20 @@ function getPhone(tx) {
   return f ? String(f.value).trim() : "";
 }
 
+function describe(step, r) {
+  return step + ": " + (r.code || "") + " " + (r.response_description || "");
+}
+
 async function deliver(plan, phone, requestId) {
+  let note = "";
   try {
     const q = await vtPost("/requery", { request_id: requestId });
     const t = q && q.content && q.content.transactions;
-    if (t && t.status) return t.status;
-  } catch (e) {}
+    note = describe("requery", q);
+    if (t && t.status) return { status: t.status, detail: note };
+  } catch (e) {
+    note = "requery error";
+  }
 
   const body = plan.vt.airtime
     ? { request_id: requestId, serviceID: plan.vt.serviceID, amount: plan.price, phone: phone }
@@ -41,9 +54,10 @@ async function deliver(plan, phone, requestId) {
 
   const p = await vtPost("/pay", body);
   const t = p && p.content && p.content.transactions;
-  if (t && t.status) return t.status;
-  if (p && p.code === "099") return "pending";
-  return "failed";
+  const detail = describe("pay", p) + " | " + note + " | id " + requestId;
+  if (t && t.status) return { status: t.status, detail: detail };
+  if (p && p.code === "099") return { status: "pending", detail: detail };
+  return { status: "failed", detail: detail };
 }
 
 module.exports = async (req, res) => {
@@ -82,17 +96,17 @@ module.exports = async (req, res) => {
 
     const phone = getPhone(tx);
     if (!/^0[789][01]\d{8}$/.test(phone)) {
-      return res.status(200).json({ status: "failed", message: "Invalid phone number on payment" });
+      return res.status(200).json({ status: "failed", message: "Invalid phone on payment: [" + phone + "]" });
     }
 
     const requestId = makeRequestId(tx.paid_at || new Date().toISOString(), reference);
     const result = await deliver(plan, phone, requestId);
 
-    if (result === "delivered") return res.status(200).json({ status: "success" });
-    if (result === "pending" || result === "initiated" || result === "processing") {
-      return res.status(200).json({ status: "pending", message: "Paid. Delivery is processing." });
+    if (result.status === "delivered") return res.status(200).json({ status: "success" });
+    if (result.status === "pending" || result.status === "initiated" || result.status === "processing") {
+      return res.status(200).json({ status: "pending", message: "Paid. Delivery is processing. " + result.detail });
     }
-    return res.status(200).json({ status: "failed", message: "Paid but delivery failed. Refund needed." });
+    return res.status(200).json({ status: "failed", message: "Paid but delivery failed. " + result.detail });
   } catch (e) {
     return res.status(500).json({ status: "error", message: "Server error" });
   }
