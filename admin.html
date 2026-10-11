@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orders</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0f1218;color:#eef1f6;margin:0;padding:16px}
+input,button{font-size:16px;padding:12px;border-radius:10px;border:1px solid #2a303c;background:#181c25;color:#eef1f6;width:100%;box-sizing:border-box;margin-top:8px}
+button{background:#0a7cff;border:0;font-weight:600}
+label{display:block;margin-top:10px;font-size:14px}
+.row{border-bottom:1px solid #2a303c;padding:10px 0;font-size:14px}
+.ok{color:#3ddc97}.bad{color:#ff6b6b}.mid{color:#ffb84d}
+small{color:#98a2b3}
+</style></head><body>
+<h2>Orders</h2>
+<input id="key" type="password" placeholder="Admin password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+<label><input id="show" type="checkbox" style="width:auto;margin-right:8px">Show password</label>
+<small id="len"></small>
+<button id="go">Load orders</button>
+<div id="out" style="margin-top:16px"></div>
+<script>
+var k=document.getElementById("key"),s=document.getElementById("show"),
+    l=document.getElementById("len"),out=document.getElementById("out");
+k.oninput=function(){l.textContent=k.value.length+" characters typed";};
+s.onchange=function(){k.type=s.checked?"text":"password";};
+document.getElementById("go").onclick=function(){
+  out.textContent="Loading...";
+  fetch("/api/orders",{headers:{"x-admin-key":k.value.trim()}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){out.textContent=d.error+" (you typed "+d.sentLength+", saved is "+d.savedLength+")";return;}
+      out.innerHTML="";
+      var t=document.createElement("div");t.textContent=d.count+" orders";out.appendChild(t);
+      d.orders.forEach(function(o){
+        var row=document.createElement("div");row.className="row";
+        row.innerHTML="<b></b> <span></span><br><small></small>";
+        row.querySelector("b").textContent=o.plan+" - N"+o.amount;
+        var sp=row.querySelector("span");
+        sp.className=o.status==="delivered"?"ok":(o.status==="failed"?"bad":"mid");
+        sp.textContent=o.status;
+        row.querySelector("small").textContent=o.phone+" | "+(o.at||"")+(o.webhook?" | webhook":"");
+        out.appendChild(row);
+      });
+    })
+    .catch(function(){out.textContent="Could not load orders";});
+};
+</script></body></html>
