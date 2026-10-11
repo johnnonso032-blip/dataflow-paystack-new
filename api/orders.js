@@ -2,7 +2,7 @@ const store = require("../lib/store");
 
 module.exports = async (req, res) => {
   const saved = String(process.env.ADMIN_KEY || "").trim();
-  const sent = String(req.query.key || "").trim();
+  const sent = String(req.headers["x-admin-key"] || req.query.key || "").trim();
   if (!saved || sent !== saved) {
     return res.status(401).json({
       error: "Not allowed",
