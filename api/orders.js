@@ -1,8 +1,14 @@
 const store = require("../lib/store");
 
 module.exports = async (req, res) => {
-  if (!process.env.ADMIN_KEY || req.query.key !== process.env.ADMIN_KEY) {
-    return res.status(401).json({ error: "Not allowed" });
+  const saved = String(process.env.ADMIN_KEY || "").trim();
+  const sent = String(req.query.key || "").trim();
+  if (!saved || sent !== saved) {
+    return res.status(401).json({
+      error: "Not allowed",
+      sentLength: sent.length,
+      savedLength: saved.length
+    });
   }
   try {
     const refs = await store.latest("orders", 50);
