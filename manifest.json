@@ -1,0 +1,12 @@
+{
+  "name": "Quicky Data",
+  "short_name": "Quicky Data",
+  "description": "Buy airtime and data fast.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1218",
+  "theme_color": "#0a7cff",
+  "icons": [
+    { "src": "/icon-512.png", "sizes": "192x192 512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
