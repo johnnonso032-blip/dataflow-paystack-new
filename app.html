@@ -2,7 +2,7 @@
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>DataFlowNG</title>
+<title>Quicky Data</title>
 <style>
 :root{--p:#6c3df4;--bg:#f6f3ff;--card:#fff;--text:#1b1630;--mut:#7a7394;--line:#ece8f8;--ok:#12a36b;--bad:#e5484d;--warn:#e8a317}
 *{box-sizing:border-box}
@@ -10,7 +10,8 @@ body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;b
 .wrap{max-width:480px;margin:0 auto;padding:16px}
 .top{display:flex;justify-content:space-between;align-items:center}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
-.av{width:38px;height:38px;border-radius:50%;background:#e4dbff;color:var(--p);display:flex;align-items:center;justify-content:center;font-weight:700}
+.av{width:38px;height:38px;border-radius:50%;background:#e4dbff;color:var(--p);display:flex;align-items:center;justify-content:center;font-weight:700;border:0;font-size:16px}
+.av.pillbtn{width:auto;border-radius:99px;padding:0 14px;font-size:13px}
 .hello{margin:14px 0 12px;color:var(--mut)}
 .wallet{background:linear-gradient(135deg,#6c3df4,#a48bff);color:#fff;border-radius:22px;padding:18px}
 .wallet small{opacity:.85}
@@ -45,17 +46,22 @@ nav button{background:none;border:0;font-size:12px;color:var(--mut);display:flex
 label{font-size:13px;color:var(--mut)}
 input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border-radius:14px;margin:6px 0 12px}
 .go{width:100%;background:var(--p);color:#fff;border:0;border-radius:16px;padding:15px;font-size:16px;font-weight:700}
+.go.sec{background:#efe9ff;color:var(--p);margin-top:10px}
 .msg{color:var(--bad);font-size:13px;min-height:18px;margin-top:8px}
 .x{float:right;background:none;border:0;font-size:24px}
+.tabs2{display:flex;gap:8px;margin:12px 0}
+.tabs2 button{flex:1;padding:11px;border:0;border-radius:12px;background:#efe9ff;color:var(--p);font-weight:700}
+.tabs2 button.on{background:var(--p);color:#fff}
+.cb{width:auto;margin:0 8px 0 0;display:inline}
 </style></head>
 <body>
 <div class="wrap">
  <div class="top">
   <div class="brand"><svg width="34" height="34" viewBox="0 0 34 34"><rect width="34" height="34" rx="10" fill="#6c3df4"/><rect x="7" y="19" width="4" height="8" rx="1.5" fill="#fff"/><rect x="13" y="15" width="4" height="12" rx="1.5" fill="#fff"/><rect x="19" y="11" width="4" height="16" rx="1.5" fill="#fff"/><rect x="25" y="7" width="4" height="20" rx="1.5" fill="#fff"/></svg><span id="brand"></span></div>
-  <div class="av">G</div>
+  <button class="av pillbtn" id="avbtn">Log in</button>
  </div>
- <div class="hello">Hi, <b>Guest</b> &#128075;</div>
- <div class="wallet"><small>Wallet balance</small><div class="amt">&#8358;0.00</div><button class="fund" disabled>Fund Wallet &middot; coming soon</button></div>
+ <div class="hello" id="hello">Hi, <b>Guest</b> &#128075;</div>
+ <div class="wallet"><small>Wallet balance</small><div class="amt">&#8358;0.00</div><button class="fund" id="fundbtn">Log in / Sign up</button></div>
  <div class="card"><div class="grid">
   <button class="tile" data-m="airtime"><span class="ico">&#128222;</span>Airtime</button>
   <button class="tile" data-m="data"><span class="ico">&#128246;</span>Data</button>
@@ -83,14 +89,35 @@ input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border
  <div class="msg" id="msg"></div>
 </div></div>
 
+<div class="sheet hide" id="asheet"><div class="panel">
+ <button class="x" id="aclose">&times;</button>
+ <h2 style="margin:0">Welcome</h2>
+ <div class="tabs2"><button id="tabIn" class="on">Log in</button><button id="tabUp">Sign up</button></div>
+ <div id="nameWrap" class="hide"><label for="aname">Your name</label><input id="aname" autocomplete="name" placeholder="e.g. Ada Obi"></div>
+ <label for="aphone">Phone number</label><input id="aphone" type="tel" inputmode="numeric" maxlength="11" placeholder="08012345678">
+ <label for="apass">Password (at least 6 characters)</label><input id="apass" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+ <label><input class="cb" id="ashow" type="checkbox">Show password</label>
+ <button class="go" id="ago" style="margin-top:12px">Log in</button>
+ <div class="msg" id="amsg"></div>
+</div></div>
+
+<div class="sheet hide" id="csheet"><div class="panel">
+ <button class="x" id="cclose">&times;</button>
+ <h2 style="margin:0 0 6px">My account</h2>
+ <div style="font-size:16px"><b id="cname"></b></div>
+ <div style="color:#7a7394;margin-top:4px" id="cphone"></div>
+ <button class="go sec" id="cout">Log out</button>
+</div></div>
+
 <script src="https://js.paystack.co/v1/inline.js"></script>
 <script src="/lib/config.js"></script>
 <script src="/lib/prices.js"></script>
 <script>
 (function(){
-var BRAND="DataFlowNG";
+var BRAND="Quicky Data";
 var C=window.DATAFLOW_CONFIG,P=window.DATAFLOW_PRICES,KEY="dataflow_orders_v1";
 var mode="airtime",net=null,planId=null,showAll=false,paying=false,tries={};
+var token="",user=null,amode="in";
 function $(id){return document.getElementById(id)}
 function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML}
 function naira(n){return "\u20A6"+Number(n).toLocaleString()}
@@ -98,7 +125,54 @@ function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){
 function save(l){try{localStorage.setItem(KEY,JSON.stringify(l))}catch(e){}}
 function upsert(o){var l=load(),i=l.findIndex(function(x){return x.reference===o.reference});if(i>=0)Object.assign(l[i],o);else l.unshift(o);save(l)}
 function say(t){$("msg").textContent=t||""}
+function amsg(t){$("amsg").textContent=t||""}
 document.title=BRAND;$("brand").textContent=BRAND;
+
+try{token=localStorage.getItem("dfng_token")||"";user=JSON.parse(localStorage.getItem("dfng_user")||"null")}catch(e){}
+function setAuth(t,u){
+  token=t||"";user=u||null;
+  try{if(t){localStorage.setItem("dfng_token",t);localStorage.setItem("dfng_user",JSON.stringify(u))}else{localStorage.removeItem("dfng_token");localStorage.removeItem("dfng_user")}}catch(e){}
+  drawUser();
+}
+function call(action,data){
+  return fetch("/api/account",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify(Object.assign({action:action},data||{}))}).then(function(r){return r.json()});
+}
+function drawUser(){
+  $("hello").innerHTML="Hi, <b>"+esc(user?user.name.split(" ")[0]:"Guest")+"</b> \uD83D\uDC4B";
+  $("avbtn").textContent=user?user.name.charAt(0).toUpperCase():"Log in";
+  $("avbtn").className=user?"av":"av pillbtn";
+  var f=$("fundbtn");
+  if(user){f.textContent="Fund Wallet \u00B7 coming soon";f.disabled=true}else{f.textContent="Log in / Sign up";f.disabled=false}
+}
+function openAuth(){amsg("");$("asheet").classList.remove("hide")}
+function setTab(m){
+  amode=m;$("tabIn").className=m==="in"?"on":"";$("tabUp").className=m==="up"?"on":"";
+  $("nameWrap").classList.toggle("hide",m!=="up");$("ago").textContent=m==="up"?"Create account":"Log in";amsg("");
+}
+$("tabIn").onclick=function(){setTab("in")};
+$("tabUp").onclick=function(){setTab("up")};
+$("ashow").onchange=function(){$("apass").type=this.checked?"text":"password"};
+$("aclose").onclick=function(){$("asheet").classList.add("hide")};
+$("avbtn").onclick=function(){
+  if(!user){setTab("in");openAuth();return}
+  $("cname").textContent=user.name;$("cphone").textContent=user.phone;$("csheet").classList.remove("hide");
+};
+$("fundbtn").onclick=function(){if(!user){setTab("up");openAuth()}};
+$("cclose").onclick=function(){$("csheet").classList.add("hide")};
+$("cout").onclick=function(){call("logout").catch(function(){});setAuth("",null);$("csheet").classList.add("hide")};
+$("ago").onclick=function(){
+  var phone=$("aphone").value.trim(),pass=$("apass").value,name=$("aname").value.trim();
+  if(!/^0[789][01]\d{8}$/.test(phone))return amsg("Enter a valid 11-digit phone number.");
+  if(pass.length<6)return amsg("Password must be at least 6 characters.");
+  if(amode==="up"&&name.length<2)return amsg("Enter your name.");
+  amsg("Please wait...");$("ago").disabled=true;
+  call(amode==="up"?"signup":"login",{phone:phone,password:pass,name:name}).then(function(d){
+    $("ago").disabled=false;
+    if(d.error)return amsg(d.error);
+    setAuth(d.token,d.user);$("asheet").classList.add("hide");$("apass").value="";amsg("");
+  }).catch(function(){$("ago").disabled=false;amsg("Could not connect. Try again.")});
+};
+if(token){call("me").then(function(d){if(d.user)setAuth(token,d.user);else if(d.error==="Not logged in")setAuth("",null)}).catch(function(){})}
 
 function nets(){return Object.keys(P.NETWORKS).filter(function(n){return mode==="airtime"?/Airtime/.test(n):/Data/.test(n)})}
 function drawChips(){
@@ -109,7 +183,11 @@ function drawPlans(){
   $("plans").innerHTML=P.NETWORKS[net].map(function(p){return '<button class="plan'+(p.id===planId?' on':'')+'" data-id="'+esc(p.id)+'">'+esc(p.label)+'<b>'+naira(p.price)+'</b></button>'}).join("");
   [].forEach.call($("plans").children,function(b){b.onclick=function(){planId=b.dataset.id;drawPlans()}});
 }
-function openSheet(m){mode=m;net=nets()[0];planId=null;$("stitle").textContent=m==="airtime"?"Buy Airtime":"Buy Data";say("");drawChips();drawPlans();$("sheet").classList.remove("hide")}
+function openSheet(m){
+  mode=m;net=nets()[0];planId=null;$("stitle").textContent=m==="airtime"?"Buy Airtime":"Buy Data";say("");drawChips();drawPlans();
+  if(user&&!$("phone").value)$("phone").value=user.phone;
+  $("sheet").classList.remove("hide");
+}
 
 function verify(ref,pid){
   return fetch("/api/verify?reference="+encodeURIComponent(ref)+"&planId="+encodeURIComponent(pid||""))
@@ -173,6 +251,7 @@ setInterval(function(){
   });
   render();
 },6000);
+drawUser();
 render();
 })();
 </script>
