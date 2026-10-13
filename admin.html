@@ -31,6 +31,7 @@ label{font-size:13px;color:var(--mut);display:block;margin-top:10px}
 .top button{width:auto;padding:9px 14px;margin:0;font-size:13px}
 h3{margin:0 0 8px;font-size:15px}
 .muted{color:var(--mut);font-size:13px}
+.tag{font-size:11px;color:var(--mut)}
 </style></head><body>
 <div class="wrap">
 <div id="login" class="card">
@@ -43,17 +44,39 @@ h3{margin:0 0 8px;font-size:15px}
 </div>
 <div id="dash" class="hide">
  <div class="top"><h2>Dashboard</h2><div style="display:flex;gap:8px"><button id="refresh" class="sec">Refresh</button><button id="out" class="sec">Log out</button></div></div>
- <div class="card hero"><small>Total sales (delivered)</small><div class="big" id="total"></div><small id="sub"></small></div>
+
+ <div class="card hero"><small>My total earnings</small><div class="big" id="earn"></div><small id="earnSub"></small></div>
+
  <div class="g2" style="margin-top:14px">
-  <div class="k"><small>Today</small><b id="today"></b></div>
-  <div class="k"><small>Last 7 days</small><b id="week"></b></div>
-  <div class="k"><small>Orders</small><b id="cnt"></b></div>
-  <div class="k"><small>My estimated profit</small><b id="profit"></b></div>
+  <div class="k"><small>Total sales (delivered)</small><b id="total"></b></div>
+  <div class="k"><small>Earned today</small><b id="eToday"></b></div>
+  <div class="k"><small>Earned last 7 days</small><b id="eWeek"></b></div>
+  <div class="k"><small>Registered accounts</small><b id="users"></b></div>
  </div>
- <div class="card"><h3>Profit estimate</h3>
-  <label for="rate">Your commission % (check your VTpass account)</label>
+
+ <div class="card"><h3>Ordinary customers</h3>
+  <div class="g2">
+   <div class="k"><small>Sales</small><b id="cSales"></b></div>
+   <div class="k"><small>My earnings</small><b id="cEarn"></b></div>
+   <div class="k"><small>Orders</small><b id="cCnt"></b></div>
+   <div class="k"><small>Cashback paid</small><b>coming soon</b></div>
+  </div></div>
+
+ <div class="card"><h3>Resellers (POS agents)</h3>
+  <div class="g2">
+   <div class="k"><small>Sales</small><b id="rSales"></b></div>
+   <div class="k"><small>My earnings</small><b id="rEarn"></b></div>
+   <div class="k"><small>Orders</small><b id="rCnt"></b></div>
+   <div class="k"><small>Wallet balances</small><b>coming soon</b></div>
+  </div>
+  <div class="muted" style="margin-top:8px">Reseller accounts and wallets are built in the next stage. Their sales and earnings will appear here automatically.</div></div>
+
+ <div class="card"><h3>Earnings settings</h3>
+  <label for="rate">Estimate commission % (used only when VTpass did not report the commission)</label>
   <input id="rate" type="number" inputmode="decimal" min="0" max="100" step="0.1" value="3">
-  <div class="muted" style="margin-top:8px">Profit = delivered sales x commission. It does not include Paystack fees.</div></div>
+  <div class="muted" id="basis" style="margin-top:8px"></div>
+  <div class="muted">Earnings do not include Paystack fees.</div></div>
+
  <div class="card"><h3>Supplier delivery status (VTpass)</h3>
   <div class="g2">
    <div class="k"><small>Delivered</small><b id="d1"></b></div>
@@ -62,7 +85,7 @@ h3{margin:0 0 8px;font-size:15px}
    <div class="k"><small>Paystack webhook seen</small><b id="d4"></b></div>
   </div>
   <div id="fails" style="margin-top:10px"></div></div>
- <div class="card"><h3>Reseller activity</h3><div class="muted">Reseller accounts and wallets come in the next stage. Their sales and earnings will show here.</div></div>
+
  <div class="card"><h3>Transactions</h3>
   <div class="tabs" id="tabs"><button data-f="all" class="on">All</button><button data-f="delivered">Delivered</button><button data-f="pending">Pending</button><button data-f="failed">Failed</button></div>
   <div id="list"></div></div>
@@ -70,11 +93,11 @@ h3{margin:0 0 8px;font-size:15px}
 </div>
 <script>
 (function(){
-var key="",orders=[],filter="all";
+var key="",orders=[],users=0,filter="all";
 function $(i){return document.getElementById(i)}
 function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML}
 function naira(n){return "\u20A6"+Math.round(n).toLocaleString()}
-function sum(a){return a.reduce(function(s,o){return s+Number(o.amount||0)},0)}
+function sum(a,f){return a.reduce(function(s,o){return s+Number(f(o)||0)},0)}
 function kind(o){var s=o.status;if(s==="delivered")return"delivered";if(s==="pending"||s==="initiated"||s==="processing")return"pending";return"failed"}
 function when(d){try{return new Date(d).toLocaleString([],{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})}catch(e){return""}}
 $("show").onchange=function(){$("key").type=this.checked?"text":"password"};
@@ -82,25 +105,34 @@ function load(){
   $("lmsg").textContent="Loading...";
   return fetch("/api/orders",{headers:{"x-admin-key":key}}).then(function(r){return r.json()}).then(function(d){
     if(d.error){$("lmsg").textContent=d.error==="Not allowed"?"Wrong password.":d.error;return false}
-    orders=d.orders||[];$("login").classList.add("hide");$("dash").classList.remove("hide");
+    orders=d.orders||[];users=d.users||0;$("login").classList.add("hide");$("dash").classList.remove("hide");
     try{sessionStorage.setItem("dfk",key)}catch(e){}
     draw();return true;
   }).catch(function(){$("lmsg").textContent="Could not load. Check your connection."});
 }
 function draw(){
-  var rate=parseFloat($("rate").value)||0,del=orders.filter(function(o){return kind(o)==="delivered"});
+  var rate=parseFloat($("rate").value)||0;
+  var del=orders.filter(function(o){return kind(o)==="delivered"});
+  function earn(o){return o.commission!==null&&o.commission!==undefined?o.commission:Number(o.amount||0)*rate/100}
   var now=Date.now(),day=new Date().toDateString();
   var today=del.filter(function(o){return new Date(o.createdAt).toDateString()===day});
   var week=del.filter(function(o){return now-Date.parse(o.createdAt)<7*864e5});
-  $("total").textContent=naira(sum(del));$("sub").textContent=del.length+" delivered orders";
-  $("today").textContent=naira(sum(today));$("week").textContent=naira(sum(week));
-  $("cnt").textContent=orders.length;$("profit").textContent=naira(sum(del)*rate/100);
+  var cus=del.filter(function(o){return o.buyer!=="reseller"}),res=del.filter(function(o){return o.buyer==="reseller"});
+  $("earn").textContent=naira(sum(del,earn));
+  $("earnSub").textContent=del.length+" delivered orders";
+  $("total").textContent=naira(sum(del,function(o){return o.amount}));
+  $("eToday").textContent=naira(sum(today,earn));$("eWeek").textContent=naira(sum(week,earn));
+  $("users").textContent=users;
+  $("cSales").textContent=naira(sum(cus,function(o){return o.amount}));$("cEarn").textContent=naira(sum(cus,earn));$("cCnt").textContent=cus.length;
+  $("rSales").textContent=naira(sum(res,function(o){return o.amount}));$("rEarn").textContent=naira(sum(res,earn));$("rCnt").textContent=res.length;
+  var exact=del.filter(function(o){return o.commission!==null&&o.commission!==undefined}).length;
+  $("basis").textContent=del.length?("Exact VTpass commission on "+exact+" of "+del.length+" orders; estimate for the rest."):"No delivered orders yet.";
   var pend=orders.filter(function(o){return kind(o)==="pending"}),fail=orders.filter(function(o){return kind(o)==="failed"});
   $("d1").textContent=del.length;$("d2").textContent=pend.length;$("d3").textContent=fail.length;
   $("d4").textContent=orders.filter(function(o){return o.webhook}).length;
   $("fails").innerHTML=fail.slice(0,5).map(function(o){return '<div class="row"><div><b>'+esc(o.plan)+'</b><small>'+esc(o.phone)+" \u00B7 "+when(o.createdAt)+'<br>'+esc(o.detail)+'</small></div><div><b>'+naira(o.amount)+'</b></div></div>'}).join("");
   var shown=orders.filter(function(o){return filter==="all"||kind(o)===filter});
-  $("list").innerHTML=shown.length?shown.map(function(o){var k=kind(o);return '<div class="row"><div><b>'+esc(o.plan)+'</b><small>'+esc(o.phone)+" \u00B7 "+when(o.createdAt)+(o.webhook?" \u00B7 webhook":"")+'</small></div><div style="text-align:right"><b>'+naira(o.amount)+'</b><br><span class="pill '+k+'">'+esc(o.status||k)+'</span></div></div>'}).join(""):'<div class="muted" style="padding:10px 0">No transactions here yet.</div>';
+  $("list").innerHTML=shown.length?shown.map(function(o){var k=kind(o);return '<div class="row"><div><b>'+esc(o.plan)+'</b><small>'+esc(o.phone)+" \u00B7 "+when(o.createdAt)+" \u00B7 "+esc(o.buyer)+(o.webhook?" \u00B7 webhook":"")+'</small></div><div style="text-align:right"><b>'+naira(o.amount)+'</b><br><span class="pill '+k+'">'+esc(o.status||k)+'</span></div></div>'}).join(""):'<div class="muted" style="padding:10px 0">No transactions here yet.</div>';
 }
 $("go").onclick=function(){key=$("key").value.trim();if(!key){$("lmsg").textContent="Type your password.";return}load()};
 $("refresh").onclick=function(){load()};
