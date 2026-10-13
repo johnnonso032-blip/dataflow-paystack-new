@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DataFlowNG</title>
+<style>
+:root{--p:#6c3df4;--bg:#f6f3ff;--card:#fff;--text:#1b1630;--mut:#7a7394;--line:#ece8f8;--ok:#12a36b;--bad:#e5484d;--warn:#e8a317}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);padding-bottom:90px}
+.wrap{max-width:480px;margin:0 auto;padding:16px}
+.top{display:flex;justify-content:space-between;align-items:center}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+.av{width:38px;height:38px;border-radius:50%;background:#e4dbff;color:var(--p);display:flex;align-items:center;justify-content:center;font-weight:700}
+.hello{margin:14px 0 12px;color:var(--mut)}
+.wallet{background:linear-gradient(135deg,#6c3df4,#a48bff);color:#fff;border-radius:22px;padding:18px}
+.wallet small{opacity:.85}
+.amt{font-size:30px;font-weight:800;margin:4px 0 12px}
+.fund{background:rgba(255,255,255,.25);color:#fff;border:0;border-radius:12px;padding:10px 16px;font-weight:600}
+.card{background:var(--card);border-radius:20px;padding:16px;margin-top:14px;box-shadow:0 2px 10px rgba(108,61,244,.07)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 6px}
+.tile{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;font-size:12px;color:var(--text);padding:0}
+.ico{width:48px;height:48px;border-radius:15px;background:#efe9ff;display:flex;align-items:center;justify-content:center;font-size:23px}
+.soon{opacity:.5}
+.promo{background:#fff6d6;border-radius:18px;padding:14px;margin-top:14px;font-size:14px}
+h3{margin:20px 0 0;font-size:16px;display:flex;justify-content:space-between;align-items:center}
+h3 button{background:none;border:0;color:var(--p);font-weight:600;font-size:13px}
+.row{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border:0}
+.row .ic{width:40px;height:40px;border-radius:12px;background:#efe9ff;display:flex;align-items:center;justify-content:center}
+.row .m{flex:1;min-width:0;font-size:14px}
+.row .m small{display:block;color:var(--mut);font-size:12px;margin-top:2px}
+.row .r{text-align:right;font-size:14px;font-weight:700}
+.pill{display:inline-block;font-size:11px;font-weight:600;color:#fff;padding:3px 9px;border-radius:99px;margin-top:4px}
+.success{background:var(--ok)}.pending{background:var(--warn)}.failed{background:var(--bad)}.abandoned{background:#8d88a3}
+.re{background:none;border:1px solid var(--p);color:var(--p);border-radius:10px;padding:3px 9px;font-size:11px;margin-top:4px}
+nav{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 0 calc(8px + env(safe-area-inset-bottom))}
+nav button{background:none;border:0;font-size:12px;color:var(--mut);display:flex;flex-direction:column;align-items:center;gap:2px}
+.sheet{position:fixed;inset:0;background:rgba(20,10,50,.5);display:flex;align-items:flex-end;z-index:9}
+.panel{background:#fff;width:100%;max-width:480px;margin:0 auto;border-radius:24px 24px 0 0;padding:18px;max-height:92vh;overflow:auto}
+.hide{display:none}
+.chips,.plans{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 14px}
+.chip,.plan{border:1px solid var(--line);background:#fff;border-radius:14px;padding:12px;text-align:left;font-size:14px;color:var(--text)}
+.chip.on,.plan.on{border-color:var(--p);background:#f2edff}
+.plan b{display:block;font-size:17px;margin-top:4px}
+label{font-size:13px;color:var(--mut)}
+input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border-radius:14px;margin:6px 0 12px}
+.go{width:100%;background:var(--p);color:#fff;border:0;border-radius:16px;padding:15px;font-size:16px;font-weight:700}
+.msg{color:var(--bad);font-size:13px;min-height:18px;margin-top:8px}
+.x{float:right;background:none;border:0;font-size:24px}
+</style></head>
+<body>
+<div class="wrap">
+ <div class="top">
+  <div class="brand"><svg width="34" height="34" viewBox="0 0 34 34"><rect width="34" height="34" rx="10" fill="#6c3df4"/><rect x="7" y="19" width="4" height="8" rx="1.5" fill="#fff"/><rect x="13" y="15" width="4" height="12" rx="1.5" fill="#fff"/><rect x="19" y="11" width="4" height="16" rx="1.5" fill="#fff"/><rect x="25" y="7" width="4" height="20" rx="1.5" fill="#fff"/></svg><span id="brand"></span></div>
+  <div class="av">G</div>
+ </div>
+ <div class="hello">Hi, <b>Guest</b> &#128075;</div>
+ <div class="wallet"><small>Wallet balance</small><div class="amt">&#8358;0.00</div><button class="fund" disabled>Fund Wallet &middot; coming soon</button></div>
+ <div class="card"><div class="grid">
+  <button class="tile" data-m="airtime"><span class="ico">&#128222;</span>Airtime</button>
+  <button class="tile" data-m="data"><span class="ico">&#128246;</span>Data</button>
+  <button class="tile soon" disabled><span class="ico">&#9889;</span>Electricity</button>
+  <button class="tile soon" disabled><span class="ico">&#128250;</span>Cable TV</button>
+  <button class="tile soon" disabled><span class="ico">&#127760;</span>Internet</button>
+  <button class="tile soon" disabled><span class="ico">&#127873;</span>Cashback</button>
+  <button class="tile soon" disabled><span class="ico">&#129309;</span>Resellers</button>
+  <button class="tile soon" disabled><span class="ico">&#8943;</span>More</button>
+ </div></div>
+ <div class="promo">&#127873; <b>Cashback</b> for customers is coming soon. Buy airtime and data now.</div>
+ <h3 id="hist">Recent transactions <button id="all">See all</button></h3>
+ <div class="card" id="list"></div>
+</div>
+<nav><button id="navHome">&#127968;<span>Home</span></button><button id="navHist">&#128221;<span>History</span></button></nav>
+
+<div class="sheet hide" id="sheet"><div class="panel">
+ <button class="x" id="close">&times;</button>
+ <h2 id="stitle" style="margin:0 0 6px"></h2>
+ <label>Network</label><div class="chips" id="chips"></div>
+ <label>Choose amount</label><div class="plans" id="plans"></div>
+ <label for="phone">Phone number</label><input id="phone" type="tel" inputmode="numeric" maxlength="11" placeholder="08012345678">
+ <label for="email">Email (for receipt)</label><input id="email" type="email" placeholder="you@example.com">
+ <button class="go" id="pay">Pay with Paystack</button>
+ <div class="msg" id="msg"></div>
+</div></div>
+
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<script src="/lib/config.js"></script>
+<script src="/lib/prices.js"></script>
+<script>
+(function(){
+var BRAND="DataFlowNG";
+var C=window.DATAFLOW_CONFIG,P=window.DATAFLOW_PRICES,KEY="dataflow_orders_v1";
+var mode="airtime",net=null,planId=null,showAll=false,paying=false,tries={};
+function $(id){return document.getElementById(id)}
+function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML}
+function naira(n){return "\u20A6"+Number(n).toLocaleString()}
+function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){return[]}}
+function save(l){try{localStorage.setItem(KEY,JSON.stringify(l))}catch(e){}}
+function upsert(o){var l=load(),i=l.findIndex(function(x){return x.reference===o.reference});if(i>=0)Object.assign(l[i],o);else l.unshift(o);save(l)}
+function say(t){$("msg").textContent=t||""}
+document.title=BRAND;$("brand").textContent=BRAND;
+
+function nets(){return Object.keys(P.NETWORKS).filter(function(n){return mode==="airtime"?/Airtime/.test(n):/Data/.test(n)})}
+function drawChips(){
+  $("chips").innerHTML=nets().map(function(n){return '<button class="chip'+(n===net?' on':'')+'" data-n="'+esc(n)+'">'+esc(n.replace(/ (Airtime|Data)$/,""))+'</button>'}).join("");
+  [].forEach.call($("chips").children,function(b){b.onclick=function(){net=b.dataset.n;planId=null;drawChips();drawPlans()}});
+}
+function drawPlans(){
+  $("plans").innerHTML=P.NETWORKS[net].map(function(p){return '<button class="plan'+(p.id===planId?' on':'')+'" data-id="'+esc(p.id)+'">'+esc(p.label)+'<b>'+naira(p.price)+'</b></button>'}).join("");
+  [].forEach.call($("plans").children,function(b){b.onclick=function(){planId=b.dataset.id;drawPlans()}});
+}
+function openSheet(m){mode=m;net=nets()[0];planId=null;$("stitle").textContent=m==="airtime"?"Buy Airtime":"Buy Data";say("");drawChips();drawPlans();$("sheet").classList.remove("hide")}
+
+function verify(ref,pid){
+  return fetch("/api/verify?reference="+encodeURIComponent(ref)+"&planId="+encodeURIComponent(pid||""))
+    .then(function(r){return r.json()})
+    .then(function(d){
+      var st=d.status;
+      if(st==="error")return;
+      if(st==="failed"&&/not found|transaction reference/i.test(d.message||""))st="abandoned";
+      upsert({reference:ref,status:st,verifiedAt:new Date().toISOString(),note:d.message||""});
+    }).catch(function(){});
+}
+
+function when(d){try{return new Date(d).toLocaleString([],{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})}catch(e){return""}}
+function render(){
+  var l=load(),shown=showAll?l.slice(0,50):l.slice(0,5);
+  $("all").textContent=showAll?"Show less":"See all";
+  $("list").innerHTML=shown.length?shown.map(function(o){
+    var title=o.plan==="Airtime"?o.network:(o.network+" "+o.plan);
+    var re=o.status!=="success"?'<br><button class="re" data-r="'+esc(o.reference)+'" data-p="'+esc(o.planId)+'">Re-check</button>':"";
+    return '<div class="row"><div class="ic">'+(/Airtime/.test(o.network||"")?"\uD83D\uDCDE":"\uD83D\uDCF6")+'</div><div class="m"><b>'+esc(title)+'</b><small>'+esc(o.phone)+" \u00B7 "+when(o.createdAt)+'</small></div><div class="r">'+naira(o.amount)+'<br><span class="pill '+esc(o.status)+'">'+esc(o.status)+'</span>'+re+'</div></div>';
+  }).join(""):'<div style="color:#7a7394;font-size:14px;padding:6px 0">No transactions yet. Buy airtime or data to get started.</div>';
+  [].forEach.call($("list").querySelectorAll("button[data-r]"),function(b){b.onclick=function(){b.disabled=true;verify(b.dataset.r,b.dataset.p).then(render)}});
+}
+
+$("pay").onclick=function(){
+  var phone=$("phone").value.trim(),email=$("email").value.trim(),plan=planId&&P.findPlan(planId);
+  if(!plan)return say("Please choose an amount.");
+  if(!/^0[789][01]\d{8}$/.test(phone))return say("Enter a valid 11-digit Nigerian phone number.");
+  if(!/^\S+@\S+\.\S+$/.test(email))return say("Enter a valid email address.");
+  if(typeof PaystackPop==="undefined")return say("Paystack failed to load. Check your connection.");
+  if(!C||!/^pk_(test|live)_/.test(C.PAYSTACK_PUBLIC_KEY))return say("Set your Paystack public key in lib/config.js first.");
+  try{localStorage.setItem("dfng_email",email)}catch(e){}
+  var ref="DFNG-"+Date.now()+"-"+Math.floor(Math.random()*1e5);
+  upsert({reference:ref,network:plan.network,planId:plan.id,plan:plan.label,amount:plan.price,phone:phone,email:email,status:"pending",createdAt:new Date().toISOString()});
+  paying=true;say("Opening payment\u2026");
+  PaystackPop.setup({
+    key:C.PAYSTACK_PUBLIC_KEY,email:email,amount:plan.price*100,currency:C.CURRENCY,ref:ref,
+    metadata:{custom_fields:[
+      {display_name:"Phone",variable_name:"phone",value:phone},
+      {display_name:"Plan",variable_name:"plan",value:plan.network+" "+plan.label}
+    ]},
+    callback:function(r){paying=false;$("sheet").classList.add("hide");render();verify(r.reference||ref,plan.id).then(render)},
+    onClose:function(){paying=false;verify(ref,plan.id).then(render)}
+  }).openIframe();
+  render();
+};
+
+document.querySelectorAll(".tile[data-m]").forEach(function(b){b.onclick=function(){openSheet(b.dataset.m)}});
+$("close").onclick=function(){$("sheet").classList.add("hide")};
+$("all").onclick=function(){showAll=!showAll;render()};
+$("navHome").onclick=function(){showAll=false;render();window.scrollTo(0,0)};
+$("navHist").onclick=function(){showAll=true;render();$("hist").scrollIntoView()};
+try{$("email").value=localStorage.getItem("dfng_email")||""}catch(e){}
+
+setInterval(function(){
+  if(!paying)load().forEach(function(o){
+    if(o.status==="pending"&&Date.now()-Date.parse(o.createdAt)>20000){
+      tries[o.reference]=(tries[o.reference]||0)+1;
+      if(tries[o.reference]<=6)verify(o.reference,o.planId).then(render);
+    }
+  });
+  render();
+},6000);
+render();
+})();
+</script>
+</body></html>
