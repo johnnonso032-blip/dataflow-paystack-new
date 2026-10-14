@@ -53,15 +53,17 @@ input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border
 .tabs2 button{flex:1;padding:11px;border:0;border-radius:12px;background:#efe9ff;color:var(--p);font-weight:700}
 .tabs2 button.on{background:var(--p);color:#fff}
 .cb{width:auto;margin:0 8px 0 0;display:inline}
+.toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#1b1630;color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;z-index:20;max-width:90%;text-align:center}
 </style></head>
 <body>
+<div class="toast hide" id="toast"></div>
 <div class="wrap">
  <div class="top">
   <div class="brand"><svg width="34" height="34" viewBox="0 0 34 34"><rect width="34" height="34" rx="10" fill="#6c3df4"/><rect x="7" y="19" width="4" height="8" rx="1.5" fill="#fff"/><rect x="13" y="15" width="4" height="12" rx="1.5" fill="#fff"/><rect x="19" y="11" width="4" height="16" rx="1.5" fill="#fff"/><rect x="25" y="7" width="4" height="20" rx="1.5" fill="#fff"/></svg><span id="brand"></span></div>
   <button class="av pillbtn" id="avbtn">Log in</button>
  </div>
  <div class="hello" id="hello">Hi, <b>Guest</b> &#128075;</div>
- <div class="wallet"><small>Wallet balance</small><div class="amt">&#8358;0.00</div><button class="fund" id="fundbtn">Log in / Sign up</button></div>
+ <div class="wallet"><small>Wallet balance</small><div class="amt" id="bal">&#8358;0.00</div><button class="fund" id="fundbtn">Log in / Sign up</button></div>
  <div class="card"><div class="grid">
   <button class="tile" data-m="airtime"><span class="ico">&#128222;</span>Airtime</button>
   <button class="tile" data-m="data"><span class="ico">&#128246;</span>Data</button>
@@ -89,6 +91,19 @@ input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border
  <div class="msg" id="msg"></div>
 </div></div>
 
+<div class="sheet hide" id="fsheet"><div class="panel">
+ <button class="x" id="fclose">&times;</button>
+ <h2 style="margin:0 0 6px">Fund Wallet</h2>
+ <label>Choose amount</label>
+ <div class="plans" id="famts"></div>
+ <label for="famt">Or type an amount (minimum &#8358;100)</label>
+ <input id="famt" type="tel" inputmode="numeric" placeholder="e.g. 3000">
+ <label for="femail">Email (for receipt)</label>
+ <input id="femail" type="email" placeholder="you@example.com">
+ <button class="go" id="fpay">Pay with Paystack</button>
+ <div class="msg" id="fmsg"></div>
+</div></div>
+
 <div class="sheet hide" id="asheet"><div class="panel">
  <button class="x" id="aclose">&times;</button>
  <h2 style="margin:0">Welcome</h2>
@@ -106,6 +121,8 @@ input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border
  <h2 style="margin:0 0 6px">My account</h2>
  <div style="font-size:16px"><b id="cname"></b></div>
  <div style="color:#7a7394;margin-top:4px" id="cphone"></div>
+ <h3 style="margin-top:16px">Recent wallet activity</h3>
+ <div id="whist"></div>
  <button class="go sec" id="cout">Log out</button>
 </div></div>
 
@@ -117,32 +134,52 @@ input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border
 var BRAND="Quicky Data";
 var C=window.DATAFLOW_CONFIG,P=window.DATAFLOW_PRICES,KEY="dataflow_orders_v1";
 var mode="airtime",net=null,planId=null,showAll=false,paying=false,tries={};
-var token="",user=null,amode="in";
+var token="",user=null,amode="in",hist=[];
 function $(id){return document.getElementById(id)}
 function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML}
 function naira(n){return "\u20A6"+Number(n).toLocaleString()}
+function money(n){return "\u20A6"+Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
 function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){return[]}}
 function save(l){try{localStorage.setItem(KEY,JSON.stringify(l))}catch(e){}}
 function upsert(o){var l=load(),i=l.findIndex(function(x){return x.reference===o.reference});if(i>=0)Object.assign(l[i],o);else l.unshift(o);save(l)}
 function say(t){$("msg").textContent=t||""}
 function amsg(t){$("amsg").textContent=t||""}
+function fmsg(t){$("fmsg").textContent=t||""}
+var tt;function note(t){var e=$("toast");e.textContent=t;e.classList.remove("hide");clearTimeout(tt);tt=setTimeout(function(){e.classList.add("hide")},4500)}
 document.title=BRAND;$("brand").textContent=BRAND;
+function when(d){try{return new Date(d).toLocaleString([],{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})}catch(e){return""}}
 
 try{token=localStorage.getItem("dfng_token")||"";user=JSON.parse(localStorage.getItem("dfng_user")||"null")}catch(e){}
+function post(path,action,data){
+  return fetch(path,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify(Object.assign({action:action},data||{}))}).then(function(r){return r.json()});
+}
+function call(a,d){return post("/api/account",a,d)}
+function wcall(a,d){return post("/api/wallet",a,d)}
+
+function drawHist(){
+  $("whist").innerHTML=hist.length?hist.map(function(h){
+    return '<div class="row"><div class="ic">\uD83D\uDCB0</div><div class="m"><b>Wallet funded</b><small>'+when(h.at)+'</small></div><div class="r" style="color:#12a36b">+'+naira(h.amount)+'</div></div>';
+  }).join(""):'<div style="color:#7a7394;font-size:14px;padding:6px 0">No wallet activity yet.</div>';
+}
+function setBal(b,h){$("bal").textContent=money(b||0);hist=h||[];drawHist()}
+function refreshBal(){
+  if(!user)return;
+  wcall("balance").then(function(d){
+    if(d.error==="Not logged in"){setAuth("",null);return}
+    if(d.balance!==undefined)setBal(d.balance,d.history);
+  }).catch(function(){});
+}
 function setAuth(t,u){
   token=t||"";user=u||null;
   try{if(t){localStorage.setItem("dfng_token",t);localStorage.setItem("dfng_user",JSON.stringify(u))}else{localStorage.removeItem("dfng_token");localStorage.removeItem("dfng_user")}}catch(e){}
   drawUser();
-}
-function call(action,data){
-  return fetch("/api/account",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify(Object.assign({action:action},data||{}))}).then(function(r){return r.json()});
+  if(user)refreshBal();else setBal(0,[]);
 }
 function drawUser(){
   $("hello").innerHTML="Hi, <b>"+esc(user?user.name.split(" ")[0]:"Guest")+"</b> \uD83D\uDC4B";
   $("avbtn").textContent=user?user.name.charAt(0).toUpperCase():"Log in";
   $("avbtn").className=user?"av":"av pillbtn";
-  var f=$("fundbtn");
-  if(user){f.textContent="Fund Wallet \u00B7 coming soon";f.disabled=true}else{f.textContent="Log in / Sign up";f.disabled=false}
+  $("fundbtn").textContent=user?"Fund Wallet":"Log in / Sign up";
 }
 function openAuth(){amsg("");$("asheet").classList.remove("hide")}
 function setTab(m){
@@ -155,9 +192,8 @@ $("ashow").onchange=function(){$("apass").type=this.checked?"text":"password"};
 $("aclose").onclick=function(){$("asheet").classList.add("hide")};
 $("avbtn").onclick=function(){
   if(!user){setTab("in");openAuth();return}
-  $("cname").textContent=user.name;$("cphone").textContent=user.phone;$("csheet").classList.remove("hide");
+  $("cname").textContent=user.name;$("cphone").textContent=user.phone;drawHist();refreshBal();$("csheet").classList.remove("hide");
 };
-$("fundbtn").onclick=function(){if(!user){setTab("up");openAuth()}};
 $("cclose").onclick=function(){$("csheet").classList.add("hide")};
 $("cout").onclick=function(){call("logout").catch(function(){});setAuth("",null);$("csheet").classList.add("hide")};
 $("ago").onclick=function(){
@@ -174,6 +210,48 @@ $("ago").onclick=function(){
 };
 if(token){call("me").then(function(d){if(d.user)setAuth(token,d.user);else if(d.error==="Not logged in")setAuth("",null)}).catch(function(){})}
 
+var FAM=[500,1000,2000,5000];
+function drawF(){
+  $("famts").innerHTML=FAM.map(function(a){return '<button class="plan" data-a="'+a+'"><b style="margin:0">'+naira(a)+'</b></button>'}).join("");
+  [].forEach.call($("famts").children,function(b){b.onclick=function(){$("famt").value=b.getAttribute("data-a")}});
+}
+$("fundbtn").onclick=function(){
+  if(!user){setTab("up");openAuth();return}
+  drawF();fmsg("");
+  try{if(!$("femail").value)$("femail").value=localStorage.getItem("dfng_email")||""}catch(e){}
+  $("fsheet").classList.remove("hide");
+};
+$("fclose").onclick=function(){$("fsheet").classList.add("hide")};
+function fundVerify(ref,n){
+  wcall("fund",{reference:ref}).then(function(d){
+    if(d.error==="Not logged in"){setAuth("",null);return}
+    if(d.balance!==undefined)setBal(d.balance,d.history);
+    if(d.ok&&d.credited)note("Wallet funded: "+naira(d.amount));
+    else if(d.ok)note("Wallet is up to date.");
+    else if(d.pending&&n<6)setTimeout(function(){fundVerify(ref,n+1)},3000);
+    else if(!d.ok)note(d.message||"Could not confirm the payment yet.");
+  }).catch(function(){if(n<6)setTimeout(function(){fundVerify(ref,n+1)},3000)});
+}
+$("fpay").onclick=function(){
+  var amt=parseInt($("famt").value,10),email=$("femail").value.trim();
+  if(!(amt>=100&&amt<=200000))return fmsg("Enter an amount from \u20A6100 to \u20A6200,000.");
+  if(!/^\S+@\S+\.\S+$/.test(email))return fmsg("Enter a valid email address.");
+  if(typeof PaystackPop==="undefined")return fmsg("Paystack failed to load. Check your connection.");
+  if(!C||!/^pk_(test|live)_/.test(C.PAYSTACK_PUBLIC_KEY))return fmsg("Set your Paystack public key in lib/config.js first.");
+  try{localStorage.setItem("dfng_email",email)}catch(e){}
+  var ref="WAL-"+Date.now()+"-"+Math.floor(Math.random()*1e5);
+  fmsg("Opening payment\u2026");
+  PaystackPop.setup({
+    key:C.PAYSTACK_PUBLIC_KEY,email:email,amount:amt*100,currency:C.CURRENCY,ref:ref,
+    metadata:{custom_fields:[
+      {display_name:"Account",variable_name:"wallet_phone",value:user.phone},
+      {display_name:"Purpose",variable_name:"purpose",value:"wallet"}
+    ]},
+    callback:function(r){$("fsheet").classList.add("hide");fmsg("");note("Confirming your payment\u2026");fundVerify(r.reference||ref,0)},
+    onClose:function(){fmsg("")}
+  }).openIframe();
+};
+
 function nets(){return Object.keys(P.NETWORKS).filter(function(n){return mode==="airtime"?/Airtime/.test(n):/Data/.test(n)})}
 function drawChips(){
   $("chips").innerHTML=nets().map(function(n){return '<button class="chip'+(n===net?' on':'')+'" data-n="'+esc(n)+'">'+esc(n.replace(/ (Airtime|Data)$/,""))+'</button>'}).join("");
@@ -186,6 +264,7 @@ function drawPlans(){
 function openSheet(m){
   mode=m;net=nets()[0];planId=null;$("stitle").textContent=m==="airtime"?"Buy Airtime":"Buy Data";say("");drawChips();drawPlans();
   if(user&&!$("phone").value)$("phone").value=user.phone;
+  try{if(!$("email").value)$("email").value=localStorage.getItem("dfng_email")||""}catch(e){}
   $("sheet").classList.remove("hide");
 }
 
@@ -200,7 +279,6 @@ function verify(ref,pid){
     }).catch(function(){});
 }
 
-function when(d){try{return new Date(d).toLocaleString([],{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})}catch(e){return""}}
 function render(){
   var l=load(),shown=showAll?l.slice(0,50):l.slice(0,5);
   $("all").textContent=showAll?"Show less":"See all";
@@ -240,7 +318,6 @@ $("close").onclick=function(){$("sheet").classList.add("hide")};
 $("all").onclick=function(){showAll=!showAll;render()};
 $("navHome").onclick=function(){showAll=false;render();window.scrollTo(0,0)};
 $("navHist").onclick=function(){showAll=true;render();$("hist").scrollIntoView()};
-try{$("email").value=localStorage.getItem("dfng_email")||""}catch(e){}
 
 setInterval(function(){
   if(!paying)load().forEach(function(o){
@@ -251,8 +328,10 @@ setInterval(function(){
   });
   render();
 },6000);
+setInterval(refreshBal,20000);
 drawUser();
 render();
+if(user)refreshBal();
 })();
 </script>
 </body></html>
