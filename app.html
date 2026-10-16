@@ -43,10 +43,12 @@ nav button{background:none;border:0;font-size:12px;color:var(--mut);display:flex
 .chip,.plan{border:1px solid var(--line);background:#fff;border-radius:14px;padding:12px;text-align:left;font-size:14px;color:var(--text)}
 .chip.on,.plan.on{border-color:var(--p);background:#f2edff}
 .plan b{display:block;font-size:17px;margin-top:4px}
+.plan s{color:var(--mut);font-size:12px;font-weight:400;margin-left:4px}
 label{font-size:13px;color:var(--mut)}
 input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border-radius:14px;margin:6px 0 12px}
 .go{width:100%;background:var(--p);color:#fff;border:0;border-radius:16px;padding:15px;font-size:16px;font-weight:700}
 .go.sec{background:#efe9ff;color:var(--p);margin-top:10px}
+.go[disabled]{opacity:.6}
 .msg{color:var(--bad);font-size:13px;min-height:18px;margin-top:8px}
 .x{float:right;background:none;border:0;font-size:24px}
 .tabs2{display:flex;gap:8px;margin:12px 0}
@@ -54,6 +56,12 @@ input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border
 .tabs2 button.on{background:var(--p);color:#fff}
 .cb{width:auto;margin:0 8px 0 0;display:inline}
 .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#1b1630;color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;z-index:20;max-width:90%;text-align:center}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.k{background:#f6f3ff;border-radius:14px;padding:12px}.k small{display:block;color:var(--mut);font-size:12px}.k b{font-size:18px}
+.note{font-size:13px;color:var(--mut);line-height:1.5;margin:8px 0}
+ul.ben{padding-left:18px;margin:10px 0;font-size:14px;line-height:1.7}
+.rcard{background:linear-gradient(135deg,#1b1630,#4b2fb3);color:#fff;border-radius:18px;padding:16px}
+.rcard .amt{margin:4px 0 10px}
 </style></head>
 <body>
 <div class="toast hide" id="toast"></div>
@@ -71,7 +79,7 @@ input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border
   <button class="tile soon" disabled><span class="ico">&#128250;</span>Cable TV</button>
   <button class="tile soon" disabled><span class="ico">&#127760;</span>Internet</button>
   <button class="tile soon" disabled><span class="ico">&#127873;</span>Cashback</button>
-  <button class="tile soon" disabled><span class="ico">&#129309;</span>Resellers</button>
+  <button class="tile" id="rtile"><span class="ico">&#129309;</span>Resellers</button>
   <button class="tile soon" disabled><span class="ico">&#8943;</span>More</button>
  </div></div>
  <div class="promo">&#127873; <b>Cashback</b> for customers is coming soon. Buy airtime and data now.</div>
@@ -83,11 +91,13 @@ input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border
 <div class="sheet hide" id="sheet"><div class="panel">
  <button class="x" id="close">&times;</button>
  <h2 id="stitle" style="margin:0 0 6px"></h2>
+ <div class="note hide" id="rnote">Reseller prices applied. Pay from your wallet.</div>
  <label>Network</label><div class="chips" id="chips"></div>
  <label>Choose amount</label><div class="plans" id="plans"></div>
  <label for="phone">Phone number</label><input id="phone" type="tel" inputmode="numeric" maxlength="11" placeholder="08012345678">
  <label for="email">Email (for receipt)</label><input id="email" type="email" placeholder="you@example.com">
  <button class="go" id="pay">Pay with Paystack</button>
+ <button class="go sec" id="wpay">Pay from wallet</button>
  <div class="msg" id="msg"></div>
 </div></div>
 
@@ -102,6 +112,12 @@ input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border
  <input id="femail" type="email" placeholder="you@example.com">
  <button class="go" id="fpay">Pay with Paystack</button>
  <div class="msg" id="fmsg"></div>
+</div></div>
+
+<div class="sheet hide" id="rsheet"><div class="panel">
+ <button class="x" id="rclose">&times;</button>
+ <h2 style="margin:0 0 6px">Resellers</h2>
+ <div id="rbody"></div>
 </div></div>
 
 <div class="sheet hide" id="asheet"><div class="panel">
@@ -134,7 +150,8 @@ input{width:100%;font-size:16px;padding:13px;border:1px solid var(--line);border
 var BRAND="Quicky Data";
 var C=window.DATAFLOW_CONFIG,P=window.DATAFLOW_PRICES,KEY="dataflow_orders_v1";
 var mode="airtime",net=null,planId=null,showAll=false,paying=false,tries={};
-var token="",user=null,amode="in",hist=[];
+var token="",user=null,amode="in",hist=[],balance=0;
+var rs={status:"none",airtimePct:1,dataPct:1};
 function $(id){return document.getElementById(id)}
 function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML}
 function naira(n){return "\u20A6"+Number(n).toLocaleString()}
@@ -142,12 +159,14 @@ function money(n){return "\u20A6"+Number(n).toLocaleString(undefined,{minimumFra
 function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){return[]}}
 function save(l){try{localStorage.setItem(KEY,JSON.stringify(l))}catch(e){}}
 function upsert(o){var l=load(),i=l.findIndex(function(x){return x.reference===o.reference});if(i>=0)Object.assign(l[i],o);else l.unshift(o);save(l)}
+function dropLocal(ref){save(load().filter(function(x){return x.reference!==ref}))}
 function say(t){$("msg").textContent=t||""}
 function amsg(t){$("amsg").textContent=t||""}
 function fmsg(t){$("fmsg").textContent=t||""}
 var tt;function note(t){var e=$("toast");e.textContent=t;e.classList.remove("hide");clearTimeout(tt);tt=setTimeout(function(){e.classList.add("hide")},4500)}
 document.title=BRAND;$("brand").textContent=BRAND;
 function when(d){try{return new Date(d).toLocaleString([],{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})}catch(e){return""}}
+function newRef(){var a="abcdefghijklmnopqrstuvwxyz0123456789",s="";for(var i=0;i<16;i++)s+=a.charAt(Math.floor(Math.random()*a.length));return s}
 
 try{token=localStorage.getItem("dfng_token")||"";user=JSON.parse(localStorage.getItem("dfng_user")||"null")}catch(e){}
 function post(path,action,data){
@@ -156,12 +175,28 @@ function post(path,action,data){
 function call(a,d){return post("/api/account",a,d)}
 function wcall(a,d){return post("/api/wallet",a,d)}
 
+/* ---------- reseller pricing (display only; the server sets the real price) ---------- */
+function shown(p){
+  if(rs.status!=="active")return p.price;
+  var pct=p.vt&&p.vt.airtime?rs.airtimePct:rs.dataPct;
+  return Math.max(1,Math.round(p.price*(100-pct)/100));
+}
+function loadRS(){
+  if(!user){rs={status:"none",airtimePct:1,dataPct:1};return Promise.resolve()}
+  return post("/api/reseller","status").then(function(d){
+    if(d.status){rs={status:d.status,airtimePct:(d.prices||{}).airtimePct||0,dataPct:(d.prices||{}).dataPct||0}}
+  }).catch(function(){});
+}
+
+/* ---------- wallet ---------- */
 function drawHist(){
   $("whist").innerHTML=hist.length?hist.map(function(h){
-    return '<div class="row"><div class="ic">\uD83D\uDCB0</div><div class="m"><b>Wallet funded</b><small>'+when(h.at)+'</small></div><div class="r" style="color:#12a36b">+'+naira(h.amount)+'</div></div>';
+    var buy=h.type==="buy",label=h.type==="fund"?"Wallet funded":(h.type==="refund"?"Refund":esc(h.plan||"Purchase"));
+    var icon=h.type==="fund"?"\uD83D\uDCB0":(h.type==="refund"?"\u21A9\uFE0F":"\uD83D\uDED2");
+    return '<div class="row"><div class="ic">'+icon+'</div><div class="m"><b>'+label+'</b><small>'+when(h.at)+'</small></div><div class="r" style="color:'+(buy?"#1b1630":"#12a36b")+'">'+(buy?"-":"+")+naira(h.amount)+'</div></div>';
   }).join(""):'<div style="color:#7a7394;font-size:14px;padding:6px 0">No wallet activity yet.</div>';
 }
-function setBal(b,h){$("bal").textContent=money(b||0);hist=h||[];drawHist()}
+function setBal(b,h){balance=b||0;$("bal").textContent=money(balance);if(h){hist=h;drawHist()}}
 function refreshBal(){
   if(!user)return;
   wcall("balance").then(function(d){
@@ -173,7 +208,7 @@ function setAuth(t,u){
   token=t||"";user=u||null;
   try{if(t){localStorage.setItem("dfng_token",t);localStorage.setItem("dfng_user",JSON.stringify(u))}else{localStorage.removeItem("dfng_token");localStorage.removeItem("dfng_user")}}catch(e){}
   drawUser();
-  if(user)refreshBal();else setBal(0,[]);
+  if(user){refreshBal();loadRS()}else{setBal(0,[]);rs={status:"none",airtimePct:1,dataPct:1}}
 }
 function drawUser(){
   $("hello").innerHTML="Hi, <b>"+esc(user?user.name.split(" ")[0]:"Guest")+"</b> \uD83D\uDC4B";
@@ -210,16 +245,20 @@ $("ago").onclick=function(){
 };
 if(token){call("me").then(function(d){if(d.user)setAuth(token,d.user);else if(d.error==="Not logged in")setAuth("",null)}).catch(function(){})}
 
+/* ---------- fund wallet ---------- */
 var FAM=[500,1000,2000,5000];
 function drawF(){
   $("famts").innerHTML=FAM.map(function(a){return '<button class="plan" data-a="'+a+'"><b style="margin:0">'+naira(a)+'</b></button>'}).join("");
   [].forEach.call($("famts").children,function(b){b.onclick=function(){$("famt").value=b.getAttribute("data-a")}});
 }
-$("fundbtn").onclick=function(){
-  if(!user){setTab("up");openAuth();return}
+function openFund(){
   drawF();fmsg("");
   try{if(!$("femail").value)$("femail").value=localStorage.getItem("dfng_email")||""}catch(e){}
   $("fsheet").classList.remove("hide");
+}
+$("fundbtn").onclick=function(){
+  if(!user){setTab("up");openAuth();return}
+  openFund();
 };
 $("fclose").onclick=function(){$("fsheet").classList.add("hide")};
 function fundVerify(ref,n){
@@ -252,19 +291,31 @@ $("fpay").onclick=function(){
   }).openIframe();
 };
 
+/* ---------- buy airtime / data ---------- */
 function nets(){return Object.keys(P.NETWORKS).filter(function(n){return mode==="airtime"?/Airtime/.test(n):/Data/.test(n)})}
 function drawChips(){
   $("chips").innerHTML=nets().map(function(n){return '<button class="chip'+(n===net?' on':'')+'" data-n="'+esc(n)+'">'+esc(n.replace(/ (Airtime|Data)$/,""))+'</button>'}).join("");
   [].forEach.call($("chips").children,function(b){b.onclick=function(){net=b.dataset.n;planId=null;drawChips();drawPlans()}});
 }
 function drawPlans(){
-  $("plans").innerHTML=P.NETWORKS[net].map(function(p){return '<button class="plan'+(p.id===planId?' on':'')+'" data-id="'+esc(p.id)+'">'+esc(p.label)+'<b>'+naira(p.price)+'</b></button>'}).join("");
+  $("plans").innerHTML=P.NETWORKS[net].map(function(p){
+    var s=shown(p),old=s<p.price?'<s>'+naira(p.price)+'</s>':"";
+    return '<button class="plan'+(p.id===planId?' on':'')+'" data-id="'+esc(p.id)+'">'+esc(p.label)+'<b>'+naira(s)+old+'</b></button>';
+  }).join("");
   [].forEach.call($("plans").children,function(b){b.onclick=function(){planId=b.dataset.id;drawPlans()}});
 }
+function drawPayButtons(){
+  var reseller=rs.status==="active";
+  $("pay").classList.toggle("hide",reseller);
+  $("wpay").classList.toggle("hide",!user||rs.status==="suspended");
+  $("wpay").textContent="Pay from wallet \u00B7 "+money(balance);
+  $("rnote").classList.toggle("hide",!reseller);
+}
 function openSheet(m){
-  mode=m;net=nets()[0];planId=null;$("stitle").textContent=m==="airtime"?"Buy Airtime":"Buy Data";say("");drawChips();drawPlans();
+  mode=m;net=nets()[0];planId=null;$("stitle").textContent=m==="airtime"?"Buy Airtime":"Buy Data";say("");
   if(user&&!$("phone").value)$("phone").value=user.phone;
   try{if(!$("email").value)$("email").value=localStorage.getItem("dfng_email")||""}catch(e){}
+  drawPayButtons();drawChips();drawPlans();
   $("sheet").classList.remove("hide");
 }
 
@@ -278,16 +329,39 @@ function verify(ref,pid){
       upsert({reference:ref,status:st,verifiedAt:new Date().toISOString(),note:d.message||""});
     }).catch(function(){});
 }
+function mapSt(s){return s==="delivered"?"success":(s==="failed"?"failed":"pending")}
+function applyOrder(o){
+  upsert({reference:o.reference,status:mapSt(o.status),amount:o.amount,note:o.message||""});
+}
+function verifyWallet(ref,n){
+  n=n||0;
+  return post("/api/buy","status",{reference:ref}).then(function(d){
+    if(d.error==="Order not found"){
+      if(n>=2){upsert({reference:ref,status:"failed",note:"Order was not placed. You were not charged."})}
+      return;
+    }
+    if(d.error)return;
+    applyOrder(d.order);
+    if(d.balance!==undefined)setBal(d.balance);
+    if(d.order.status==="failed")note("Delivery failed. Your wallet was refunded.");
+  }).catch(function(){});
+}
 
 function render(){
-  var l=load(),shown=showAll?l.slice(0,50):l.slice(0,5);
+  var l=load(),shown2=showAll?l.slice(0,50):l.slice(0,5);
   $("all").textContent=showAll?"Show less":"See all";
-  $("list").innerHTML=shown.length?shown.map(function(o){
+  $("list").innerHTML=shown2.length?shown2.map(function(o){
     var title=o.plan==="Airtime"?o.network:(o.network+" "+o.plan);
     var re=o.status!=="success"?'<br><button class="re" data-r="'+esc(o.reference)+'" data-p="'+esc(o.planId)+'">Re-check</button>':"";
-    return '<div class="row"><div class="ic">'+(/Airtime/.test(o.network||"")?"\uD83D\uDCDE":"\uD83D\uDCF6")+'</div><div class="m"><b>'+esc(title)+'</b><small>'+esc(o.phone)+" \u00B7 "+when(o.createdAt)+'</small></div><div class="r">'+naira(o.amount)+'<br><span class="pill '+esc(o.status)+'">'+esc(o.status)+'</span>'+re+'</div></div>';
+    return '<div class="row"><div class="ic">'+(/Airtime/.test(o.network||"")?"\uD83D\uDCDE":"\uD83D\uDCF6")+'</div><div class="m"><b>'+esc(title)+'</b><small>'+esc(o.phone)+" \u00B7 "+when(o.createdAt)+(String(o.reference).indexOf("WP-")===0?" \u00B7 wallet":"")+'</small></div><div class="r">'+naira(o.amount)+'<br><span class="pill '+esc(o.status)+'">'+esc(o.status)+'</span>'+re+'</div></div>';
   }).join(""):'<div style="color:#7a7394;font-size:14px;padding:6px 0">No transactions yet. Buy airtime or data to get started.</div>';
-  [].forEach.call($("list").querySelectorAll("button[data-r]"),function(b){b.onclick=function(){b.disabled=true;verify(b.dataset.r,b.dataset.p).then(render)}});
+  [].forEach.call($("list").querySelectorAll("button[data-r]"),function(b){
+    b.onclick=function(){
+      b.disabled=true;
+      var p=String(b.dataset.r).indexOf("WP-")===0?verifyWallet(b.dataset.r,2):verify(b.dataset.r,b.dataset.p);
+      p.then(render);
+    };
+  });
 }
 
 $("pay").onclick=function(){
@@ -313,6 +387,96 @@ $("pay").onclick=function(){
   render();
 };
 
+$("wpay").onclick=function(){
+  var phone=$("phone").value.trim(),plan=planId&&P.findPlan(planId);
+  if(!user)return say("Log in first.");
+  if(!plan)return say("Please choose an amount.");
+  if(!/^0[789][01]\d{8}$/.test(phone))return say("Enter a valid 11-digit Nigerian phone number.");
+  var price=shown(plan);
+  if(balance<price)return say("Your wallet has "+money(balance)+". Fund your wallet first.");
+  var cref=newRef(),ref="WP-"+cref;
+  $("wpay").disabled=true;say("Processing\u2026");
+  upsert({reference:ref,network:plan.network,planId:plan.id,plan:plan.label,amount:price,phone:phone,status:"pending",createdAt:new Date().toISOString()});
+  post("/api/buy","buy",{planId:plan.id,phone:phone,clientRef:cref}).then(function(d){
+    $("wpay").disabled=false;
+    if(d.error){
+      dropLocal(ref);say(d.error);render();
+      if(d.error==="Not logged in")setAuth("",null);
+      return;
+    }
+    applyOrder(d.order);
+    if(d.balance!==undefined)setBal(d.balance);
+    $("sheet").classList.add("hide");say("");render();
+    if(d.order.status==="delivered")note("Done! "+d.order.plan+" sent to "+d.order.phone);
+    else if(d.order.status==="failed")note("Delivery failed. Your wallet was refunded.");
+    else{note("Processing. We will update the status.");setTimeout(function(){verifyWallet(ref,0).then(render)},5000)}
+  }).catch(function(){
+    $("wpay").disabled=false;
+    say("Network problem. Check Recent transactions before trying again.");
+    setTimeout(function(){verifyWallet(ref,0).then(function(){render();refreshBal()})},4000);
+  });
+};
+
+/* ---------- resellers ---------- */
+function rbox(h){$("rbody").innerHTML=h}
+function drawReseller(d){
+  if(d.status==="pending"){
+    rbox('<div class="rcard"><b>Request received</b><div class="note" style="color:#e4dbff">Your reseller request is waiting for approval. You will be able to use reseller prices as soon as it is activated.</div></div><button class="go sec" id="rrefresh">Check status</button>');
+    $("rrefresh").onclick=openReseller;
+  }else if(d.status==="suspended"){
+    rbox('<div class="rcard"><b>Reseller access suspended</b><div class="note" style="color:#e4dbff">Please contact support to find out why and how to get access back.</div></div>');
+  }else{
+    var ap=(d.prices||{}).airtimePct,dp=(d.prices||{}).dataPct;
+    rbox('<div class="note">Become a POS reseller and buy airtime and data at lower prices to sell to your own customers.</div>'+
+      '<ul class="ben"><li>Lower prices than ordinary customers'+(ap||dp?' (about '+esc(ap)+'% off airtime, '+esc(dp)+'% off data)':'')+'</li><li>Pay from your wallet &mdash; fund it first, then sell fast</li><li>Your own dashboard with sales and earnings</li><li>Failed orders are refunded to your wallet automatically</li></ul>'+
+      '<label for="rname">Your business or shop name</label><input id="rname" maxlength="40" placeholder="e.g. Ada POS Centre">'+
+      '<button class="go" id="rreg">Register as Reseller</button><div class="msg" id="rmsg"></div>');
+    $("rreg").onclick=function(){
+      var n=$("rname").value.trim();
+      if(n.length<2){$("rmsg").textContent="Enter your business or shop name.";return}
+      $("rreg").disabled=true;
+      post("/api/reseller","register",{businessName:n}).then(function(r){
+        if(r.error&&!r.status){$("rreg").disabled=false;$("rmsg").textContent=r.error;return}
+        rs.status=r.status||"pending";drawReseller({status:rs.status,prices:r.prices});
+        note("Request sent. We will review it.");
+      }).catch(function(){$("rreg").disabled=false;$("rmsg").textContent="Could not connect. Try again."});
+    };
+  }
+}
+function drawDash(d){
+  var s=d.stats||{};
+  rbox('<div class="rcard"><small>'+esc(d.businessName)+' &middot; wallet balance</small><div class="amt">'+money(d.balance)+'</div><button class="fund" id="rfund">Fund Wallet</button></div>'+
+    '<div class="g2"><div class="k"><small>Sales (normal value)</small><b>'+naira(s.sales||0)+'</b></div><div class="k"><small>Earnings</small><b>'+naira(s.earnings||0)+'</b></div><div class="k"><small>Spent from wallet</small><b>'+naira(s.spent||0)+'</b></div><div class="k"><small>Orders</small><b>'+(s.orders||0)+'</b></div></div>'+
+    '<div class="note">Earnings = what you save compared with the normal price. Delivered '+(s.delivered||0)+' &middot; Pending '+(s.pending||0)+' &middot; Failed (refunded) '+(s.failed||0)+'.</div>'+
+    '<div class="g2"><button class="go" id="rair">Buy Airtime</button><button class="go" id="rdat">Buy Data</button></div>'+
+    '<h3 style="margin-top:6px">Recent sales</h3><div id="rrecent"></div>');
+  $("rrecent").innerHTML=(d.recent||[]).length?d.recent.map(function(o){
+    return '<div class="row"><div class="ic">'+(/Airtime/.test(o.plan)?"\uD83D\uDCDE":"\uD83D\uDCF6")+'</div><div class="m"><b>'+esc(o.plan)+'</b><small>'+esc(o.phone)+" \u00B7 "+when(o.createdAt)+'</small></div><div class="r">'+naira(o.amount)+'<br><span class="pill '+(o.status==="delivered"?"success":o.status)+'">'+esc(o.status)+'</span></div></div>';
+  }).join(""):'<div class="note">No sales yet. Fund your wallet and make your first sale.</div>';
+  $("rfund").onclick=function(){$("rsheet").classList.add("hide");openFund()};
+  $("rair").onclick=function(){$("rsheet").classList.add("hide");openSheet("airtime")};
+  $("rdat").onclick=function(){$("rsheet").classList.add("hide");openSheet("data")};
+  setBal(d.balance,d.history);
+}
+function openReseller(){
+  if(!user){setTab("up");openAuth();note("Create an account or log in first, then tap Resellers.");return}
+  $("rsheet").classList.remove("hide");
+  rbox('<div class="note">Loading\u2026</div>');
+  post("/api/reseller","status").then(function(d){
+    if(d.error==="Not logged in"){setAuth("",null);$("rsheet").classList.add("hide");return}
+    if(d.error){rbox('<div class="msg">'+esc(d.error)+'</div>');return}
+    rs={status:d.status,airtimePct:(d.prices||{}).airtimePct||0,dataPct:(d.prices||{}).dataPct||0};
+    if(d.status==="active"){
+      post("/api/reseller","dashboard").then(function(x){
+        if(x.error){rbox('<div class="msg">'+esc(x.error)+'</div>');return}
+        drawDash(x);
+      }).catch(function(){rbox('<div class="msg">Could not load your dashboard.</div>')});
+    }else drawReseller(d);
+  }).catch(function(){rbox('<div class="msg">Could not connect. Try again.</div>')});
+}
+$("rtile").onclick=openReseller;
+$("rclose").onclick=function(){$("rsheet").classList.add("hide")};
+
 document.querySelectorAll(".tile[data-m]").forEach(function(b){b.onclick=function(){openSheet(b.dataset.m)}});
 $("close").onclick=function(){$("sheet").classList.add("hide")};
 $("all").onclick=function(){showAll=!showAll;render()};
@@ -323,7 +487,9 @@ setInterval(function(){
   if(!paying)load().forEach(function(o){
     if(o.status==="pending"&&Date.now()-Date.parse(o.createdAt)>20000){
       tries[o.reference]=(tries[o.reference]||0)+1;
-      if(tries[o.reference]<=6)verify(o.reference,o.planId).then(render);
+      if(tries[o.reference]<=6){
+        (String(o.reference).indexOf("WP-")===0?verifyWallet(o.reference,tries[o.reference]):verify(o.reference,o.planId)).then(render);
+      }
     }
   });
   render();
@@ -331,7 +497,7 @@ setInterval(function(){
 setInterval(refreshBal,20000);
 drawUser();
 render();
-if(user)refreshBal();
+if(user){refreshBal();loadRS()}
 })();
 </script>
 </body></html>
