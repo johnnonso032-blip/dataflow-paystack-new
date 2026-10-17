@@ -1,5 +1,6 @@
 const store = require("../lib/store");
 const pricing = require("../lib/pricing");
+const auth = require("../lib/auth");
 
 function pct(x, fallback) {
   const n = Number(x);
@@ -25,6 +26,20 @@ module.exports = async (req, res) => {
       u.reseller = r;
       await store.set("user:" + phone, u);
       await store.addToList("resellers", Date.now(), phone);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (b.action === "resetPassword") {
+      const phone = String(b.phone || "");
+      const pw = String(b.newPassword || "");
+      if (pw.length < 6 || pw.length > 100) return res.status(400).json({ error: "Password must be 6 to 100 characters." });
+      const u = await store.get("user:" + phone);
+      if (!u) return res.status(404).json({ error: "User not found" });
+      u.salt = auth.newSalt();
+      u.hash = auth.hash(pw, u.salt);
+      u.revokedAt = Date.now();
+      await store.set("user:" + phone, u);
+      await store.del("rl:login:" + phone);
       return res.status(200).json({ ok: true });
     }
 
