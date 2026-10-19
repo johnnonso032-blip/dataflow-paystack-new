@@ -10,7 +10,8 @@ body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;b
 .wrap{max-width:480px;margin:0 auto;padding:16px}
 .top{display:flex;justify-content:space-between;align-items:center}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
-.av{width:38px;height:38px;border-radius:50%;background:#e4dbff;color:var(--p);display:flex;align-items:center;justify-content:center;font-weight:700;border:0;font-size:16px}
+.av{width:38px;height:38px;border-radius:50%;background:#e4dbff;color:var(--p);display:flex;align-items:center;justify-content:center;font-weight:700;border:0;font-size:16px;background-size:cover;background-position:center}
+.bigav{width:76px;height:76px;border-radius:50%;background:#e4dbff;color:var(--p);display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;background-size:cover;background-position:center;flex:none}
 .av.pillbtn{width:auto;border-radius:99px;padding:0 14px;font-size:13px}
 .hello{margin:14px 0 12px;color:var(--mut)}
 .wallet{background:linear-gradient(135deg,#6c3df4,#a48bff);color:#fff;border-radius:22px;padding:18px}
@@ -134,9 +135,17 @@ ul.ben{padding-left:18px;margin:10px 0;font-size:14px;line-height:1.7}
 
 <div class="sheet hide" id="csheet"><div class="panel">
  <button class="x" id="cclose">&times;</button>
- <h2 style="margin:0 0 6px">My account</h2>
- <div style="font-size:16px"><b id="cname"></b></div>
- <div style="color:#7a7394;margin-top:4px" id="cphone"></div>
+ <h2 style="margin:0 0 10px">My account</h2>
+ <div style="display:flex;align-items:center;gap:14px"><div class="bigav" id="bigav"></div><div><div style="font-size:16px"><b id="cname"></b></div><div style="color:#7a7394;margin-top:4px" id="cphone"></div></div></div>
+ <input type="file" id="cfile" accept="image/*" class="hide">
+ <div class="g2"><button class="go sec" id="cpick" style="margin-top:0">Change photo</button><button class="go sec" id="crem" style="margin-top:0">Remove photo</button></div>
+ <div class="msg" id="pmsg"></div>
+ <h3 style="margin-top:10px">Change password</h3>
+ <label for="cpw1">Current password</label><input id="cpw1" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+ <label for="cpw2">New password (at least 6 characters)</label><input id="cpw2" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+ <label><input class="cb" id="cpshow" type="checkbox">Show passwords</label>
+ <button class="go" id="cpw" style="margin-top:12px">Change password</button>
+ <div class="msg" id="cpmsg"></div>
  <h3 style="margin-top:16px">Recent wallet activity</h3>
  <div id="whist"></div>
  <button class="go sec" id="cout">Log out</button>
@@ -150,7 +159,7 @@ ul.ben{padding-left:18px;margin:10px 0;font-size:14px;line-height:1.7}
 var BRAND="Quicky Data";
 var C=window.DATAFLOW_CONFIG,P=window.DATAFLOW_PRICES,KEY="dataflow_orders_v1";
 var mode="airtime",net=null,planId=null,showAll=false,paying=false,tries={};
-var token="",user=null,amode="in",hist=[],balance=0;
+var token="",user=null,amode="in",hist=[],balance=0,avatar="";
 var rs={status:"none",airtimePct:1,dataPct:1};
 function $(id){return document.getElementById(id)}
 function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML}
@@ -205,14 +214,15 @@ function refreshBal(){
   }).catch(function(){});
 }
 function setAuth(t,u){
-  token=t||"";user=u||null;
+  token=t||"";user=u||null;if(!user)avatar="";
   try{if(t){localStorage.setItem("dfng_token",t);localStorage.setItem("dfng_user",JSON.stringify(u))}else{localStorage.removeItem("dfng_token");localStorage.removeItem("dfng_user")}}catch(e){}
   drawUser();
-  if(user){refreshBal();loadRS()}else{setBal(0,[]);rs={status:"none",airtimePct:1,dataPct:1}}
+  if(user){refreshBal();loadRS();loadProfile()}else{setBal(0,[]);rs={status:"none",airtimePct:1,dataPct:1}}
 }
 function drawUser(){
   $("hello").innerHTML="Hi, <b>"+esc(user?user.name.split(" ")[0]:"Guest")+"</b> \uD83D\uDC4B";
-  $("avbtn").textContent=user?user.name.charAt(0).toUpperCase():"Log in";
+  var av=$("avbtn");
+  if(user&&avatar){av.textContent="";av.style.backgroundImage='url("'+avatar+'")'}else{av.style.backgroundImage="";av.textContent=user?user.name.charAt(0).toUpperCase():"Log in"}
   $("avbtn").className=user?"av":"av pillbtn";
   $("fundbtn").textContent=user?"Fund Wallet":"Log in / Sign up";
 }
@@ -227,7 +237,7 @@ $("ashow").onchange=function(){$("apass").type=this.checked?"text":"password"};
 $("aclose").onclick=function(){$("asheet").classList.add("hide")};
 $("avbtn").onclick=function(){
   if(!user){setTab("in");openAuth();return}
-  $("cname").textContent=user.name;$("cphone").textContent=user.phone;drawHist();refreshBal();$("csheet").classList.remove("hide");
+  $("cname").textContent=user.name;$("cphone").textContent=user.phone;drawBig();drawHist();refreshBal();pm("");$("cpmsg").textContent="";$("csheet").classList.remove("hide");
 };
 $("cclose").onclick=function(){$("csheet").classList.add("hide")};
 $("cout").onclick=function(){call("logout").catch(function(){});setAuth("",null);$("csheet").classList.add("hide")};
@@ -244,6 +254,73 @@ $("ago").onclick=function(){
   }).catch(function(){$("ago").disabled=false;amsg("Could not connect. Try again.")});
 };
 if(token){call("me").then(function(d){if(d.user)setAuth(token,d.user);else if(d.error==="Not logged in")setAuth("",null)}).catch(function(){})}
+
+
+/* ---------- profile picture and password ---------- */
+function drawBig(){
+  var b=$("bigav");
+  if(avatar){b.textContent="";b.style.backgroundImage='url("'+avatar+'")'}
+  else{b.style.backgroundImage="";b.textContent=user?user.name.charAt(0).toUpperCase():""}
+}
+function setAvatar(a){avatar=a||"";drawUser();drawBig()}
+function loadProfile(){
+  if(!user)return;
+  post("/api/profile","get").then(function(d){
+    if(d.error==="Not logged in"){setAuth("",null);return}
+    if(typeof d.avatar==="string")setAvatar(d.avatar);
+  }).catch(function(){});
+}
+function pm(t,ok){var e=$("pmsg");e.textContent=t||"";e.style.color=ok?"#12a36b":"#e5484d"}
+function resizeFile(file,cb){
+  var rd=new FileReader();
+  rd.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      var s=Math.min(img.width,img.height),sx=(img.width-s)/2,sy=(img.height-s)/2;
+      var c=document.createElement("canvas");c.width=192;c.height=192;
+      c.getContext("2d").drawImage(img,sx,sy,s,s,0,0,192,192);
+      cb(c.toDataURL("image/jpeg",0.8));
+    };
+    img.onerror=function(){cb(null)};
+    img.src=rd.result;
+  };
+  rd.onerror=function(){cb(null)};
+  rd.readAsDataURL(file);
+}
+$("cpick").onclick=function(){$("cfile").click()};
+$("cfile").onchange=function(){
+  var f=this.files&&this.files[0];
+  if(!f)return;
+  pm("Saving photo\u2026",true);
+  resizeFile(f,function(d){
+    if(!d){pm("Could not read that photo. Try another.");return}
+    post("/api/profile","setAvatar",{avatar:d}).then(function(r){
+      if(r.error){pm(r.error);return}
+      setAvatar(r.avatar);pm("Photo saved.",true);
+    }).catch(function(){pm("Could not save. Try again.")});
+  });
+  this.value="";
+};
+$("crem").onclick=function(){
+  post("/api/profile","removeAvatar").then(function(r){
+    if(r.error){pm(r.error);return}
+    setAvatar("");pm("Photo removed.",true);
+  }).catch(function(){pm("Could not save. Try again.")});
+};
+$("cpshow").onchange=function(){var t=this.checked?"text":"password";$("cpw1").type=t;$("cpw2").type=t};
+$("cpw").onclick=function(){
+  var a=$("cpw1").value,b=$("cpw2").value,m=$("cpmsg");
+  m.style.color="#e5484d";
+  if(!a){m.textContent="Type your current password.";return}
+  if(b.length<6){m.textContent="New password must be at least 6 characters.";return}
+  m.textContent="Please wait...";$("cpw").disabled=true;
+  post("/api/profile","changePassword",{currentPassword:a,newPassword:b}).then(function(r){
+    $("cpw").disabled=false;
+    if(r.error){m.textContent=r.error;return}
+    setAuth(r.token,user);$("cpw1").value="";$("cpw2").value="";
+    m.style.color="#12a36b";m.textContent="Password changed.";
+  }).catch(function(){$("cpw").disabled=false;m.textContent="Could not connect. Try again."});
+};
 
 /* ---------- fund wallet ---------- */
 var FAM=[500,1000,2000,5000];
@@ -497,7 +574,7 @@ setInterval(function(){
 setInterval(refreshBal,20000);
 drawUser();
 render();
-if(user){refreshBal();loadRS()}
+if(user){refreshBal();loadRS();loadProfile()}
 })();
 </script>
 </body></html>
