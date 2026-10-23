@@ -1,5 +1,6 @@
 const store = require("../lib/store");
 const auth = require("../lib/auth");
+const emailLib = require("../lib/email");
 
 const JPEG = /^data:image\/jpeg;base64,([A-Za-z0-9+\/]+={0,2})$/;
 const MAX_AVATAR = 60000;
@@ -21,7 +22,23 @@ module.exports = async (req, res) => {
     const b = req.body || {};
 
     if (b.action === "get") {
-      return res.status(200).json({ name: user.name, phone: user.phone, avatar: user.avatar || "" });
+      return res.status(200).json({ name: user.name, phone: user.phone, avatar: user.avatar || "", email: user.email || "" });
+    }
+
+    if (b.action === "setEmail") {
+      if (user.email) return res.status(409).json({ error: "Your account already has an email." });
+      if ((await store.incrWithExpiry("rl:email:" + user.phone, 3600)) > 10) {
+        return res.status(429).json({ error: "Too many attempts. Try again later." });
+      }
+      const em = emailLib.normalize(b.email);
+      if (!em) return res.status(400).json({ error: "Enter a valid email address." });
+      if (!(await emailLib.claim(em, user.phone))) {
+        return res.status(409).json({ error: "This email already belongs to another account." });
+      }
+      user.email = em.display;
+      user.emailKey = em.key;
+      await store.set("user:" + user.phone, user);
+      return res.status(200).json({ email: user.email });
     }
 
     if (b.action === "setAvatar") {
