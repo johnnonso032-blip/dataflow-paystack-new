@@ -1,5 +1,6 @@
 const store = require("../lib/store");
 const auth = require("../lib/auth");
+const emailLib = require("../lib/email");
 
 const PHONE = /^0[789][01]\d{8}$/;
 
@@ -15,24 +16,30 @@ module.exports = async (req, res) => {
       const phone = String(b.phone || "").replace(/\s+/g, "");
       const name = String(b.name || "").trim().slice(0, 40);
       const pw = String(b.password || "");
+      const em = emailLib.normalize(b.email);
       if (!PHONE.test(phone)) return res.status(400).json({ error: "Enter a valid phone number." });
       if (name.length < 2) return res.status(400).json({ error: "Enter your name." });
+      if (!em) return res.status(400).json({ error: "Enter a valid email address." });
       if (pw.length < 6 || pw.length > 100) {
         return res.status(400).json({ error: "Password must be 6 to 100 characters." });
+      }
+      if (!(await emailLib.claim(em, phone))) {
+        return res.status(409).json({ error: "This email already belongs to an account. Log in instead." });
       }
       const salt = auth.newSalt();
       const user = {
         phone: phone, name: name, role: "customer", salt: salt,
+        email: em.display, emailKey: em.key,
         hash: auth.hash(pw, salt), createdAt: new Date().toISOString()
       };
       const created = await store.setNx("user:" + phone, user);
       if (!created) {
+        await emailLib.release(em);
         return res.status(409).json({ error: "This phone number already has an account. Log in instead." });
       }
       await store.addToList("users", Date.now(), phone);
       return res.status(200).json({ token: await auth.newSession(phone), user: auth.pub(user) });
     }
-
     if (b.action === "login") {
       const phone = String(b.phone || "").replace(/\s+/g, "");
       const pw = String(b.password || "");
@@ -49,17 +56,13 @@ module.exports = async (req, res) => {
       await store.del(limitKey);
       return res.status(200).json({ token: await auth.newSession(phone), user: auth.pub(u) });
     }
-
     const s = await auth.session(req);
     if (!s) return res.status(401).json({ error: "Not logged in" });
-
     if (b.action === "me") return res.status(200).json({ user: auth.pub(s.user) });
-
     if (b.action === "logout") {
       await store.del("sess:" + s.token);
       return res.status(200).json({ ok: true });
     }
-
     return res.status(400).json({ error: "Unknown action" });
   } catch (e) {
     return res.status(500).json({ error: "Server error" });
