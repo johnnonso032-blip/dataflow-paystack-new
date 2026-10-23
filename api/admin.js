@@ -48,7 +48,8 @@ module.exports = async (req, res) => {
       const next = {
         airtimePct: pct(b.airtimePct, cur.airtimePct),
         dataPct: pct(b.dataPct, cur.dataPct),
-        commissionPct: pct(b.commissionPct, cur.commissionPct)
+        commissionPct: pct(b.commissionPct, cur.commissionPct),
+        autoApprove: b.autoApprove === undefined ? cur.autoApprove === true : (b.autoApprove === true || b.autoApprove === "true")
       };
       await store.set("settings:pricing", next);
       return res.status(200).json({ ok: true, settings: next });
@@ -84,7 +85,7 @@ module.exports = async (req, res) => {
         hooked: hooked,
         users: users.map(function (u) {
           return {
-            name: u.name, phone: u.phone, createdAt: u.createdAt,
+            name: u.name, phone: u.phone, email: u.email || "", createdAt: u.createdAt,
             reseller: u.reseller ? { status: u.reseller.status, businessName: u.reseller.businessName, requestedAt: u.reseller.requestedAt } : null,
             balance: balOf[u.phone] || 0,
             orders: (per[u.phone] || {}).orders || 0,
