@@ -1,12 +1,13 @@
 {
-  "name": "Quicky Data",
-  "short_name": "Quicky Data",
+  "name": "QuickData",
+  "short_name": "QuickData",
   "description": "Buy airtime and data fast.",
-  "start_url": "/",
+  "start_url": "/app.html",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0f1218",
-  "theme_color": "#0a7cff",
+  "background_color": "#f6f3ff",
+  "theme_color": "#6c3df4",
   "icons": [
     { "src": "/icon-512.png", "sizes": "192x192 512x512", "type": "image/png", "purpose": "any" }
   ]
-}
+    }
