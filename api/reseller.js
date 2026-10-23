@@ -18,7 +18,9 @@ module.exports = async (req, res) => {
       return res.status(200).json({
         status: r ? r.status : "none",
         businessName: r ? r.businessName : "",
-        prices: prices
+        prices: prices,
+        hasEmail: !!user.email,
+        auto: set.autoApprove === true
       });
     }
 
@@ -26,10 +28,14 @@ module.exports = async (req, res) => {
       if (r && r.status !== "none") return res.status(409).json({ error: "You already applied.", status: r.status });
       const name = String(b.businessName || "").trim().slice(0, 40);
       if (name.length < 2) return res.status(400).json({ error: "Enter your business or shop name." });
-      user.reseller = { status: "pending", businessName: name, requestedAt: new Date().toISOString() };
+      if (!user.email) return res.status(400).json({ error: "Add your email to your account first.", needEmail: true });
+      const auto = set.autoApprove === true;
+      const now = new Date().toISOString();
+      user.reseller = { status: auto ? "active" : "pending", businessName: name, requestedAt: now };
+      if (auto) { user.reseller.approvedAt = now; user.reseller.auto = true; }
       await store.set("user:" + user.phone, user);
       await store.addToList("resellers", Date.now(), user.phone);
-      return res.status(200).json({ status: "pending", businessName: name, prices: prices });
+      return res.status(200).json({ status: user.reseller.status, businessName: name, prices: prices, auto: auto });
     }
 
     if (b.action === "dashboard") {
