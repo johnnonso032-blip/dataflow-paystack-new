@@ -2,7 +2,7 @@
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Quicky Data</title>
+<title>QuickData</title>
 <style>
 :root{--p:#6c3df4;--bg:#f6f3ff;--card:#fff;--text:#1b1630;--mut:#7a7394;--line:#ece8f8;--ok:#12a36b;--bad:#e5484d;--warn:#e8a317}
 *{box-sizing:border-box}
@@ -84,6 +84,7 @@ ul.ben{padding-left:18px;margin:10px 0;font-size:14px;line-height:1.7}
   <button class="tile soon" disabled><span class="ico">&#8943;</span>More</button>
  </div></div>
  <div class="promo">&#127873; <b>Cashback</b> for customers is coming soon. Buy airtime and data now.</div>
+ <div class="card hide" id="rcta"><b>Sell airtime and data?</b><div class="note">Become a POS reseller to get lower prices and your own sales dashboard.</div><button class="go" id="rcbtn">Become a Reseller</button></div>
  <h3 id="hist">Recent transactions <button id="all">See all</button></h3>
  <div class="card" id="list"></div>
 </div>
@@ -125,8 +126,11 @@ ul.ben{padding-left:18px;margin:10px 0;font-size:14px;line-height:1.7}
  <button class="x" id="aclose">&times;</button>
  <h2 style="margin:0">Welcome</h2>
  <div class="tabs2"><button id="tabIn" class="on">Log in</button><button id="tabUp">Sign up</button></div>
+ <div id="typeWrap" class="hide"><label>I want to</label><div class="tabs2" style="margin:6px 0 10px"><button id="tcus" class="on">Buy for myself</button><button id="tres">Sell as a reseller</button></div></div>
+ <div id="bizWrap" class="hide"><label for="abiz">Business or shop name</label><input id="abiz" maxlength="40" placeholder="e.g. Ada POS Centre"></div>
  <div id="nameWrap" class="hide"><label for="aname">Your name</label><input id="aname" autocomplete="name" placeholder="e.g. Ada Obi"></div>
  <label for="aphone">Phone number</label><input id="aphone" type="tel" inputmode="numeric" maxlength="11" placeholder="08012345678">
+ <div id="emailWrap" class="hide"><label for="aemail">Email address (one email, one account)</label><input id="aemail" type="email" autocomplete="email" placeholder="you@example.com"></div>
  <label for="apass">Password (at least 6 characters)</label><input id="apass" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
  <label><input class="cb" id="ashow" type="checkbox">Show password</label>
  <button class="go" id="ago" style="margin-top:12px">Log in</button>
@@ -137,6 +141,10 @@ ul.ben{padding-left:18px;margin:10px 0;font-size:14px;line-height:1.7}
  <button class="x" id="cclose">&times;</button>
  <h2 style="margin:0 0 10px">My account</h2>
  <div style="display:flex;align-items:center;gap:14px"><div class="bigav" id="bigav"></div><div><div style="font-size:16px"><b id="cname"></b></div><div style="color:#7a7394;margin-top:4px" id="cphone"></div></div></div>
+ <div class="note" id="cemail"></div>
+ <div id="cemform" class="hide"><label for="cemin">Add your email</label><input id="cemin" type="email" placeholder="you@example.com"><button class="go sec" id="cemadd" style="margin-top:0">Save email</button></div>
+ <div class="note" id="cstat"></div>
+ <button class="go hide" id="cbec" style="margin-bottom:10px">Become a Reseller</button>
  <input type="file" id="cfile" accept="image/*" class="hide">
  <div class="g2"><button class="go sec" id="cpick" style="margin-top:0">Change photo</button><button class="go sec" id="crem" style="margin-top:0">Remove photo</button></div>
  <div class="msg" id="pmsg"></div>
@@ -156,10 +164,10 @@ ul.ben{padding-left:18px;margin:10px 0;font-size:14px;line-height:1.7}
 <script src="/lib/prices.js"></script>
 <script>
 (function(){
-var BRAND="Quicky Data";
+var BRAND="QuickData";
 var C=window.DATAFLOW_CONFIG,P=window.DATAFLOW_PRICES,KEY="dataflow_orders_v1";
 var mode="airtime",net=null,planId=null,showAll=false,paying=false,tries={};
-var token="",user=null,amode="in",hist=[],balance=0,avatar="";
+var token="",user=null,amode="in",hist=[],balance=0,avatar="",acct="cus",uemail="";
 var rs={status:"none",airtimePct:1,dataPct:1};
 function $(id){return document.getElementById(id)}
 function esc(s){var d=document.createElement("div");d.textContent=String(s==null?"":s);return d.innerHTML}
@@ -190,10 +198,18 @@ function shown(p){
   var pct=p.vt&&p.vt.airtime?rs.airtimePct:rs.dataPct;
   return Math.max(1,Math.round(p.price*(100-pct)/100));
 }
+function updateCtas(){
+  var none=!!user&&rs.status==="none";
+  $("rcta").classList.toggle("hide",!none);
+  $("cbec").classList.toggle("hide",!none);
+  var lab={active:"Account type: reseller (active)",pending:"Reseller request: waiting for approval",suspended:"Reseller access: suspended"};
+  $("cstat").textContent=user?(lab[rs.status]||"Account type: customer"):"";
+}
 function loadRS(){
-  if(!user){rs={status:"none",airtimePct:1,dataPct:1};return Promise.resolve()}
+  if(!user){rs={status:"none",airtimePct:1,dataPct:1};updateCtas();return Promise.resolve()}
   return post("/api/reseller","status").then(function(d){
     if(d.status){rs={status:d.status,airtimePct:(d.prices||{}).airtimePct||0,dataPct:(d.prices||{}).dataPct||0}}
+    updateCtas();
   }).catch(function(){});
 }
 
@@ -214,7 +230,7 @@ function refreshBal(){
   }).catch(function(){});
 }
 function setAuth(t,u){
-  token=t||"";user=u||null;if(!user)avatar="";
+  token=t||"";user=u||null;if(!user){avatar="";uemail=""}
   try{if(t){localStorage.setItem("dfng_token",t);localStorage.setItem("dfng_user",JSON.stringify(u))}else{localStorage.removeItem("dfng_token");localStorage.removeItem("dfng_user")}}catch(e){}
   drawUser();
   if(user){refreshBal();loadRS();loadProfile()}else{setBal(0,[]);rs={status:"none",airtimePct:1,dataPct:1}}
@@ -225,32 +241,47 @@ function drawUser(){
   if(user&&avatar){av.textContent="";av.style.backgroundImage='url("'+avatar+'")'}else{av.style.backgroundImage="";av.textContent=user?user.name.charAt(0).toUpperCase():"Log in"}
   $("avbtn").className=user?"av":"av pillbtn";
   $("fundbtn").textContent=user?"Fund Wallet":"Log in / Sign up";
+  updateCtas();
 }
 function openAuth(){amsg("");$("asheet").classList.remove("hide")}
 function setTab(m){
   amode=m;$("tabIn").className=m==="in"?"on":"";$("tabUp").className=m==="up"?"on":"";
-  $("nameWrap").classList.toggle("hide",m!=="up");$("ago").textContent=m==="up"?"Create account":"Log in";amsg("");
+  $("nameWrap").classList.toggle("hide",m!=="up");$("emailWrap").classList.toggle("hide",m!=="up");
+  $("typeWrap").classList.toggle("hide",m!=="up");$("bizWrap").classList.toggle("hide",!(m==="up"&&acct==="res"));
+  $("ago").textContent=m==="up"?"Create account":"Log in";amsg("");
 }
+$("tcus").onclick=function(){acct="cus";$("tcus").className="on";$("tres").className="";setTab(amode)};
+$("tres").onclick=function(){acct="res";$("tres").className="on";$("tcus").className="";setTab(amode)};
 $("tabIn").onclick=function(){setTab("in")};
 $("tabUp").onclick=function(){setTab("up")};
 $("ashow").onchange=function(){$("apass").type=this.checked?"text":"password"};
 $("aclose").onclick=function(){$("asheet").classList.add("hide")};
 $("avbtn").onclick=function(){
   if(!user){setTab("in");openAuth();return}
-  $("cname").textContent=user.name;$("cphone").textContent=user.phone;drawBig();drawHist();refreshBal();pm("");$("cpmsg").textContent="";$("csheet").classList.remove("hide");
+  $("cname").textContent=user.name;$("cphone").textContent=user.phone;drawBig();drawEmail();updateCtas();drawHist();refreshBal();pm("");$("cpmsg").textContent="";$("csheet").classList.remove("hide");
 };
 $("cclose").onclick=function(){$("csheet").classList.add("hide")};
 $("cout").onclick=function(){call("logout").catch(function(){});setAuth("",null);$("csheet").classList.add("hide")};
 $("ago").onclick=function(){
   var phone=$("aphone").value.trim(),pass=$("apass").value,name=$("aname").value.trim();
+  var email=$("aemail").value.trim(),biz=$("abiz").value.trim(),wantReseller=amode==="up"&&acct==="res";
   if(!/^0[789][01]\d{8}$/.test(phone))return amsg("Enter a valid 11-digit phone number.");
   if(pass.length<6)return amsg("Password must be at least 6 characters.");
   if(amode==="up"&&name.length<2)return amsg("Enter your name.");
+  if(amode==="up"&&!/^\S+@\S+\.\S+$/.test(email))return amsg("Enter a valid email address.");
+  if(wantReseller&&biz.length<2)return amsg("Enter your business or shop name.");
   amsg("Please wait...");$("ago").disabled=true;
-  call(amode==="up"?"signup":"login",{phone:phone,password:pass,name:name}).then(function(d){
+  call(amode==="up"?"signup":"login",{phone:phone,password:pass,name:name,email:email}).then(function(d){
     $("ago").disabled=false;
     if(d.error)return amsg(d.error);
     setAuth(d.token,d.user);$("asheet").classList.add("hide");$("apass").value="";amsg("");
+    if(wantReseller){
+      post("/api/reseller","register",{businessName:biz}).then(function(r){
+        if(r.error&&!r.status){note("Account created. "+r.error);return}
+        note(r.status==="active"?"Welcome! Your reseller access is active.":"Account created. Your reseller request was sent for approval.");
+        loadRS();
+      }).catch(function(){note("Account created. Tap Resellers to finish your request.")});
+    }
   }).catch(function(){$("ago").disabled=false;amsg("Could not connect. Try again.")});
 };
 if(token){call("me").then(function(d){if(d.user)setAuth(token,d.user);else if(d.error==="Not logged in")setAuth("",null)}).catch(function(){})}
@@ -268,8 +299,21 @@ function loadProfile(){
   post("/api/profile","get").then(function(d){
     if(d.error==="Not logged in"){setAuth("",null);return}
     if(typeof d.avatar==="string")setAvatar(d.avatar);
+    uemail=d.email||"";drawEmail();
   }).catch(function(){});
 }
+function drawEmail(){
+  if(uemail){$("cemail").textContent="Email: "+uemail;$("cemform").classList.add("hide")}
+  else{$("cemail").textContent=user?"No email on this account yet. Add one to use reseller features.":"";$("cemform").classList.toggle("hide",!user)}
+}
+$("cemadd").onclick=function(){
+  var e=$("cemin").value.trim();
+  if(!/^\S+@\S+\.\S+$/.test(e)){pm("Enter a valid email address.");return}
+  post("/api/profile","setEmail",{email:e}).then(function(r){
+    if(r.error){pm(r.error);return}
+    uemail=r.email;drawEmail();pm("Email saved.",true);
+  }).catch(function(){pm("Could not save. Try again.")});
+};
 function pm(t,ok){var e=$("pmsg");e.textContent=t||"";e.style.color=ok?"#12a36b":"#e5484d"}
 function resizeFile(file,cb){
   var rd=new FileReader();
@@ -502,10 +546,20 @@ function drawReseller(d){
     $("rrefresh").onclick=openReseller;
   }else if(d.status==="suspended"){
     rbox('<div class="rcard"><b>Reseller access suspended</b><div class="note" style="color:#e4dbff">Please contact support to find out why and how to get access back.</div></div>');
+  }else if(!d.hasEmail){
+    rbox('<div class="note">Add your email to your account first. One email can belong to only one account.</div><label for="remail">Email address</label><input id="remail" type="email" placeholder="you@example.com"><button class="go" id="remailgo">Save email</button><div class="msg" id="rmsg"></div>');
+    $("remailgo").onclick=function(){
+      var e=$("remail").value.trim();
+      if(!/^\S+@\S+\.\S+$/.test(e)){$("rmsg").textContent="Enter a valid email address.";return}
+      post("/api/profile","setEmail",{email:e}).then(function(r){
+        if(r.error){$("rmsg").textContent=r.error;return}
+        uemail=r.email;drawEmail();openReseller();
+      }).catch(function(){$("rmsg").textContent="Could not connect. Try again."});
+    };
   }else{
     var ap=(d.prices||{}).airtimePct,dp=(d.prices||{}).dataPct;
     rbox('<div class="note">Become a POS reseller and buy airtime and data at lower prices to sell to your own customers.</div>'+
-      '<ul class="ben"><li>Lower prices than ordinary customers'+(ap||dp?' (about '+esc(ap)+'% off airtime, '+esc(dp)+'% off data)':'')+'</li><li>Pay from your wallet &mdash; fund it first, then sell fast</li><li>Your own dashboard with sales and earnings</li><li>Failed orders are refunded to your wallet automatically</li></ul>'+
+      '<ul class="ben"><li>Lower prices than ordinary customers'+(ap||dp?' (about '+esc(ap)+'% off airtime, '+esc(dp)+'% off data)':'')+'</li><li>Pay from your wallet &mdash; fund it first, then sell fast</li><li>Your own dashboard with sales and earnings</li><li>Failed orders are refunded to your wallet automatically</li></ul>'+(d.auto?'<div class="note">Your request is approved instantly. You keep the same account and wallet.</div>':'<div class="note">We review requests before activating them. You keep the same account and wallet.</div>')+
       '<label for="rname">Your business or shop name</label><input id="rname" maxlength="40" placeholder="e.g. Ada POS Centre">'+
       '<button class="go" id="rreg">Register as Reseller</button><div class="msg" id="rmsg"></div>');
     $("rreg").onclick=function(){
@@ -513,8 +567,10 @@ function drawReseller(d){
       if(n.length<2){$("rmsg").textContent="Enter your business or shop name.";return}
       $("rreg").disabled=true;
       post("/api/reseller","register",{businessName:n}).then(function(r){
-        if(r.error&&!r.status){$("rreg").disabled=false;$("rmsg").textContent=r.error;return}
-        rs.status=r.status||"pending";drawReseller({status:rs.status,prices:r.prices});
+        if(r.error&&!r.status){$("rreg").disabled=false;$("rmsg").textContent=r.error;if(r.needEmail)openReseller();return}
+        rs.status=r.status||"pending";updateCtas();
+        if(rs.status==="active"){note("Reseller access is active.");openReseller();return}
+        drawReseller({status:rs.status,prices:r.prices});
         note("Request sent. We will review it.");
       }).catch(function(){$("rreg").disabled=false;$("rmsg").textContent="Could not connect. Try again."});
     };
@@ -542,7 +598,7 @@ function openReseller(){
   post("/api/reseller","status").then(function(d){
     if(d.error==="Not logged in"){setAuth("",null);$("rsheet").classList.add("hide");return}
     if(d.error){rbox('<div class="msg">'+esc(d.error)+'</div>');return}
-    rs={status:d.status,airtimePct:(d.prices||{}).airtimePct||0,dataPct:(d.prices||{}).dataPct||0};
+    rs={status:d.status,airtimePct:(d.prices||{}).airtimePct||0,dataPct:(d.prices||{}).dataPct||0};updateCtas();
     if(d.status==="active"){
       post("/api/reseller","dashboard").then(function(x){
         if(x.error){rbox('<div class="msg">'+esc(x.error)+'</div>');return}
@@ -552,6 +608,8 @@ function openReseller(){
   }).catch(function(){rbox('<div class="msg">Could not connect. Try again.</div>')});
 }
 $("rtile").onclick=openReseller;
+$("rcbtn").onclick=openReseller;
+$("cbec").onclick=function(){$("csheet").classList.add("hide");openReseller()};
 $("rclose").onclick=function(){$("rsheet").classList.add("hide")};
 
 document.querySelectorAll(".tile[data-m]").forEach(function(b){b.onclick=function(){openSheet(b.dataset.m)}});
