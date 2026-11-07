@@ -5,6 +5,7 @@ const ledger = require("../lib/ledger");
 const pricing = require("../lib/pricing");
 const supplier = require("../lib/supplier");
 const wallet = require("../lib/wallet");
+const pay = require("../lib/paystack");
 
 const PHONE = /^0[789][01]\d{8}$/;
 const PENDING = ["pending", "initiated", "processing"];
@@ -53,6 +54,13 @@ module.exports = async (req, res) => {
       if (!plan) return res.status(400).json({ error: "Choose a valid amount." });
       if (!PHONE.test(phone)) return res.status(400).json({ error: "Enter a valid phone number." });
       if (!/^[A-Za-z0-9]{8,40}$/.test(cref)) return res.status(400).json({ error: "Bad request id." });
+
+      // Never let test money meet live delivery, or live money meet fake delivery.
+      const cfg = pay.configProblem();
+      if (cfg) {
+        console.error("PURCHASE BLOCKED, payment settings problem:", cfg);
+        return res.status(503).json({ error: "Payments are temporarily unavailable. Please try again later." });
+      }
 
       const rstatus = user.reseller && user.reseller.status;
       if (rstatus === "suspended") {
