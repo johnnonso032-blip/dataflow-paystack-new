@@ -1,7 +1,7 @@
 const { fulfil } = require("../lib/fulfil");
 
 module.exports = async (req, res) => {
-  const reference = req.query.reference;
+  const reference = String(req.query.reference || "");
   if (!reference) {
     return res.status(400).json({ status: "error", message: "Missing reference" });
   }
@@ -9,8 +9,9 @@ module.exports = async (req, res) => {
     return res.status(500).json({ status: "error", message: "Server keys not set" });
   }
   try {
-    const out = await fulfil(reference, req.query.planId);
-    return res.status(200).json(out);
+    // Any planId in the web address is deliberately ignored.
+    const out = await fulfil(reference);
+    return res.status(out.status === "error" ? 503 : 200).json(out);
   } catch (e) {
     return res.status(500).json({ status: "error", message: "Server error: " + String(e.message || e).slice(0, 100) });
   }
