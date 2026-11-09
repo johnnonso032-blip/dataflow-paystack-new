@@ -7,6 +7,10 @@ const supplier = require("../lib/supplier");
 const wallet = require("../lib/wallet");
 const pay = require("../lib/paystack");
 
+function k(name) {
+  return pay.ns() + name;
+}
+
 const PHONE = /^0[789][01]\d{8}$/;
 const PENDING = ["pending", "initiated", "processing"];
 
@@ -35,7 +39,7 @@ async function apply(order, result) {
     await ledger.refundOnce(order.buyerPhone, order.reference, order.amount);
     order.refunded = true;
   }
-  await store.set("order:" + order.reference, order);
+  await store.set(k("order:" + order.reference), order);
   return order;
 }
 
@@ -79,21 +83,21 @@ module.exports = async (req, res) => {
         source: "wallet", delivery: "pending", createdAt: new Date().toISOString()
       };
 
-      const claimed = await store.setNx("order:" + ref, order);
+      const claimed = await store.setNx(k("order:" + ref), order);
       if (!claimed) {
-        const old = await store.get("order:" + ref);
+        const old = await store.get(k("order:" + ref));
         if (!old || old.buyerPhone !== user.phone) return res.status(409).json({ error: "Request id already used." });
         return res.status(200).json({ order: view(old), balance: await wallet.balance(user.phone) });
       }
 
       const paid = await ledger.debit(user.phone, charge);
       if (!paid) {
-        await store.del("order:" + ref);
+        await store.del(k("order:" + ref));
         return res.status(402).json({ error: "Insufficient balance. Fund your wallet first." });
       }
       await ledger.record(user.phone, ref, { type: "buy", amount: charge, at: order.createdAt, reference: ref, plan: order.plan });
-      await store.addToList("orders", Date.parse(order.createdAt), ref);
-      await store.addToList("uorders:" + user.phone, Date.parse(order.createdAt), ref);
+      await store.addToList(k("orders"), Date.parse(order.createdAt), ref);
+      await store.addToList(k("uorders:" + user.phone), Date.parse(order.createdAt), ref);
 
       let result;
       try {
@@ -111,7 +115,7 @@ module.exports = async (req, res) => {
     if (b.action === "status") {
       const ref = String(b.reference || "");
       if (!/^WP-[A-Za-z0-9]+$/.test(ref)) return res.status(400).json({ error: "Bad reference" });
-      const order = await store.get("order:" + ref);
+      const order = await store.get(k("order:" + ref));
       if (!order || order.buyerPhone !== user.phone) return res.status(404).json({ error: "Order not found" });
       if (order.delivery === "pending") {
         let chk = { status: "unknown" };
