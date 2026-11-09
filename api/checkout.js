@@ -48,6 +48,12 @@ module.exports = async (req, res) => {
       }
       intent = { kind: "wallet", phone: user.phone, buyerPhone: user.phone, amountKobo: amount * 100 };
     } else if (b.kind === "order") {
+      // Resellers (active or suspended) buy airtime and data from their wallet, never by direct card payment.
+      // They can still fund the wallet by card (the wallet branch above).
+      const rstatus = user && user.reseller && user.reseller.status;
+      if (rstatus === "active" || rstatus === "suspended") {
+        return res.status(403).json({ error: "Resellers pay for airtime and data from their wallet. Fund your wallet by card, then buy from your wallet." });
+      }
       const plan = prices.findPlan(String(b.planId || ""));
       const phone = String(b.phone || "").trim();
       if (!plan) return res.status(400).json({ error: "Choose a valid amount." });
