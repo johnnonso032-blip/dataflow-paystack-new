@@ -2,6 +2,7 @@ const store = require("../lib/store");
 const auth = require("../lib/auth");
 const wallet = require("../lib/wallet");
 const pricing = require("../lib/pricing");
+const pay = require("../lib/paystack");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
@@ -13,6 +14,7 @@ module.exports = async (req, res) => {
     const r = user.reseller || null;
     const set = await pricing.settings();
     const prices = { airtimePct: set.airtimePct, dataPct: set.dataPct };
+    const NS = pay.ns();
 
     if (b.action === "status") {
       return res.status(200).json({
@@ -40,8 +42,8 @@ module.exports = async (req, res) => {
 
     if (b.action === "dashboard") {
       if (!r || r.status !== "active") return res.status(403).json({ error: "Reseller access is not active." });
-      const refs = await store.latest("uorders:" + user.phone, 200);
-      const orders = (await Promise.all(refs.map(function (x) { return store.get("order:" + x); }))).filter(Boolean);
+      const refs = await store.latest(NS + "uorders:" + user.phone, 200);
+      const orders = (await Promise.all(refs.map(function (x) { return store.get(NS + "order:" + x); }))).filter(Boolean);
       const done = orders.filter(function (o) { return o.delivery === "delivered"; });
       const sum = function (a, f) { return a.reduce(function (t, o) { return t + Number(f(o) || 0); }, 0); };
       const w = await wallet.summary(user.phone);
