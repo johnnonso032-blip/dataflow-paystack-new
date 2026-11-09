@@ -1,6 +1,7 @@
 const store = require("../lib/store");
 const pricing = require("../lib/pricing");
 const auth = require("../lib/auth");
+const pay = require("../lib/paystack");
 
 function pct(x, fallback) {
   const n = Number(x);
@@ -13,6 +14,7 @@ module.exports = async (req, res) => {
   const sent = String(req.headers["x-admin-key"] || "").trim();
   if (!saved || sent !== saved) return res.status(401).json({ error: "Not allowed" });
   const b = req.body || {};
+  const NS = pay.ns();
   try {
     if (b.action === "setReseller") {
       const phone = String(b.phone || "");
@@ -58,18 +60,18 @@ module.exports = async (req, res) => {
     if (b.action === "overview") {
       const set = await pricing.settings();
       const phones = await store.latest("users", 300);
-      const orderRefs = await store.latest("orders", 500);
+      const orderRefs = await store.latest(NS + "orders", 500);
       const mget = async function (keys) {
         if (!keys.length) return [];
         const r = await store.cmd(["MGET"].concat(keys));
         return r.map(function (v) { return v ? JSON.parse(v) : null; });
       };
       const users = (await mget(phones.map(function (p) { return "user:" + p; }))).filter(Boolean);
-      const bal = phones.length ? await store.cmd(["MGET"].concat(phones.map(function (p) { return "wallet:" + p; }))) : [];
+      const bal = phones.length ? await store.cmd(["MGET"].concat(phones.map(function (p) { return NS + "wallet:" + p; }))) : [];
       const balOf = {};
       phones.forEach(function (p, i) { balOf[p] = Number(bal[i] || 0); });
-      const orders = (await mget(orderRefs.map(function (r) { return "order:" + r; }))).filter(Boolean);
-      const hooks = orderRefs.length ? await store.cmd(["MGET"].concat(orderRefs.map(function (r) { return "hook:" + r; }))) : [];
+      const orders = (await mget(orderRefs.map(function (r) { return NS + "order:" + r; }))).filter(Boolean);
+      const hooks = orderRefs.length ? await store.cmd(["MGET"].concat(orderRefs.map(function (r) { return NS + "hook:" + r; }))) : [];
       const hooked = hooks.filter(Boolean).length;
 
       const per = {};
@@ -82,6 +84,7 @@ module.exports = async (req, res) => {
 
       return res.status(200).json({
         settings: set,
+        mode: pay.keyMode() || "unknown",
         hooked: hooked,
         users: users.map(function (u) {
           return {
